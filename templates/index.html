@@ -6,112 +6,194 @@
 <title>Project Health Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
-  :root {
-    --bg: #0b0f1a; --panel: #111827; --border: #1f2d45;
-    --accent: #00d4b4; --accent2: #f97316; --warn: #facc15;
-    --danger: #ef4444; --text: #e2e8f0; --muted: #64748b; --green: #22c55e;
-    --font-head: 'Syne', sans-serif; --font-mono: 'DM Mono', monospace;
-    --c1:#00d4b4;--c2:#38bdf8;--c3:#818cf8;--c4:#c084fc;--c5:#f472b6;
-    --c6:#fb923c;--c7:#facc15;--c8:#a3e635;--c9:#34d399;--c10:#67e8f9;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;}
-  header{padding:28px 40px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#0b0f1a 0%,#111c2e 100%);}
-  .logo-mark{width:42px;height:42px;background:var(--accent);clip-path:polygon(50% 0%,100% 100%,0% 100%);}
-  header h1{font-family:var(--font-head);font-size:1.5rem;font-weight:800;letter-spacing:-0.5px;color:#fff;}
-  header span{color:var(--accent);}
-  .header-meta{margin-left:auto;color:var(--muted);font-size:0.75rem;}
-  main{padding:32px 40px;max-width:1600px;margin:0 auto;}
-  .section-title{display:block;font-family:var(--font-head);font-size:0.7rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin-bottom:16px;}
-  .cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:40px;}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;cursor:pointer;transition:border-color .2s,transform .2s;position:relative;overflow:hidden;}
-  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);transition:height .2s;}
-  .card:hover{border-color:var(--accent);transform:translateY(-2px);}
-  .card.active{border-color:var(--accent);}
-  .card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;}
-  .card-name{font-family:var(--font-head);font-weight:700;font-size:1rem;color:#fff;}
-  .card-id{font-size:0.7rem;color:var(--muted);margin-top:2px;}
-  .badge{font-size:0.65rem;font-weight:500;padding:3px 9px;border-radius:99px;letter-spacing:1px;}
-  .badge-good{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);}
-  .badge-warn{background:rgba(250,204,21,.12);color:var(--warn);border:1px solid rgba(250,204,21,.3);}
-  .badge-danger{background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
-  .scores-row{display:flex;gap:24px;}
-  .score-block{flex:1;}
-  .score-label{font-size:0.65rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
-  .score-value{font-family:var(--font-head);font-size:2.2rem;font-weight:800;line-height:1;}
-  .score-unit{font-size:1rem;font-weight:400;color:var(--muted);}
-  .mini-bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden;}
-  .mini-bar-fill{height:100%;border-radius:2px;transition:width .8s ease;}
-  .card-meta{margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;}
-  .card-meta-item{font-size:0.68rem;color:var(--muted);}
-  .card-meta-item strong{color:var(--text);}
-  .detail-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px;margin-bottom:40px;display:none;}
-  .detail-panel.open{display:block;}
-  .detail-header{display:flex;align-items:center;gap:16px;margin-bottom:28px;flex-wrap:wrap;}
-  .detail-title{font-family:var(--font-head);font-size:1.4rem;font-weight:800;color:#fff;}
-  .detail-scores{margin-left:auto;display:flex;gap:24px;}
-  .detail-score-block{text-align:right;}
-  .detail-score-num{font-family:var(--font-head);font-size:2rem;font-weight:800;}
-  .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;}
-  .chart-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:20px;}
-  .chart-box h3{font-family:var(--font-head);font-size:0.75rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
-  .chart-box canvas{max-height:260px;}
-  .chart-box.full{grid-column:1/-1;}
-  .chart-box.full canvas{max-height:240px;}
-  .transparency-section{margin-top:28px;}
-  .transparency-section h3{font-family:var(--font-head);font-size:0.75rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
-  .metrics-table{width:100%;border-collapse:collapse;font-size:0.75rem;}
-  .metrics-table th{text-align:left;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border);font-weight:400;letter-spacing:1px;text-transform:uppercase;font-size:0.65rem;}
-  .metrics-table td{padding:8px 10px;border-bottom:1px solid rgba(31,45,69,.5);}
-  .metrics-table tr:last-child td{border-bottom:none;}
-  .pill-bar{display:inline-flex;align-items:center;gap:6px;width:100%;}
-  .pill-bar-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
-  .pill-bar-fill{height:100%;border-radius:3px;}
-  .pill-bar-pct{width:42px;text-align:right;color:var(--accent);}
-  .proximity-note{background:rgba(0,212,180,.05);border:1px solid rgba(0,212,180,.15);border-radius:8px;padding:14px 16px;font-size:0.73rem;color:var(--muted);margin-top:16px;line-height:1.6;}
-  .proximity-note strong{color:var(--accent);}
-  #loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:99;font-family:var(--font-head);font-size:1.2rem;color:var(--accent);}
-  .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:16px;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .formula-chip{display:inline-block;background:rgba(0,212,180,.08);border:1px solid rgba(0,212,180,.2);border-radius:4px;padding:2px 6px;font-size:0.63rem;color:var(--accent);}
-  @media(max-width:900px){.charts-grid{grid-template-columns:1fr;}}
+:root {
+  --bg:#0b0f1a;--panel:#111827;--panel2:#0f1a2e;--border:#1f2d45;
+  --accent:#00d4b4;--accent2:#f97316;--warn:#facc15;--danger:#ef4444;
+  --text:#e2e8f0;--muted:#64748b;--green:#22c55e;
+  --fh:'Syne',sans-serif;--fm:'DM Mono',monospace;
+  --c1:#00d4b4;--c2:#38bdf8;--c3:#818cf8;--c4:#c084fc;--c5:#f472b6;
+  --c6:#fb923c;--c7:#facc15;--c8:#a3e635;--c9:#34d399;--c10:#67e8f9;
+  --c11:#f43f5e;--c12:#84cc16;--c13:#06b6d4;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100vh;}
+
+/* HEADER */
+header{padding:22px 36px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#0b0f1a,#111c2e);position:sticky;top:0;z-index:50;}
+.logo{width:36px;height:36px;background:var(--accent);clip-path:polygon(50% 0%,100% 100%,0% 100%);}
+header h1{font-family:var(--fh);font-size:1.3rem;font-weight:800;color:#fff;}
+header h1 span{color:var(--accent);}
+.header-sub{font-size:.68rem;color:var(--muted);margin-top:2px;}
+.header-right{margin-left:auto;display:flex;gap:10px;align-items:center;}
+.btn{font-family:var(--fm);font-size:.72rem;padding:7px 14px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--text);transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn-accent{background:rgba(0,212,180,.1);border-color:var(--accent);color:var(--accent);}
+.btn-accent:hover{background:rgba(0,212,180,.2);}
+
+/* MAIN */
+main{padding:28px 36px;max-width:1700px;margin:0 auto;}
+.sec-title{font-family:var(--fh);font-size:.65rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin-bottom:14px;}
+
+/* CARDS */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-bottom:32px;}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);}
+.card.warn::before{background:var(--warn);}
+.card.danger::before{background:var(--danger);}
+.card.good::before{background:var(--green);}
+.card:hover{transform:translateY(-2px);border-color:rgba(0,212,180,.4);}
+.card.active{border-color:var(--accent);}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
+.card-name{font-family:var(--fh);font-size:.95rem;font-weight:700;color:#fff;}
+.card-id{font-size:.65rem;color:var(--muted);margin-top:2px;}
+.badge{font-size:.6rem;padding:2px 8px;border-radius:99px;font-weight:600;letter-spacing:.5px;}
+.badge-good{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.25);}
+.badge-warn{background:rgba(250,204,21,.12);color:var(--warn);border:1px solid rgba(250,204,21,.25);}
+.badge-danger{background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.25);}
+.scores-row{display:flex;gap:20px;margin-bottom:12px;}
+.score-block{flex:1;}
+.score-label{font-size:.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;}
+.score-val{font-family:var(--fh);font-size:2rem;font-weight:800;line-height:1;}
+.score-sub{font-size:.85rem;font-weight:400;color:var(--muted);}
+.mini-bar{height:3px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden;}
+.mini-fill{height:100%;border-radius:2px;transition:width .8s ease;}
+.delta-badge{display:inline-flex;align-items:center;gap:3px;font-size:.65rem;padding:2px 6px;border-radius:4px;margin-top:5px;font-weight:600;}
+.delta-up{background:rgba(34,197,94,.12);color:var(--green);}
+.delta-down{background:rgba(239,68,68,.12);color:var(--danger);}
+.delta-flat{background:rgba(100,116,139,.12);color:var(--muted);}
+.card-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.chip{font-size:.63rem;padding:3px 8px;border-radius:5px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--muted);}
+.chip strong{color:var(--text);}
+.chip.warn{border-color:rgba(250,204,21,.3);color:var(--warn);}
+.chip.danger{border-color:rgba(239,68,68,.3);color:var(--danger);}
+
+/* NARRATIVE */
+.narrative-box{background:rgba(0,212,180,.04);border:1px solid rgba(0,212,180,.15);border-radius:8px;padding:14px 16px;font-size:.75rem;line-height:1.7;color:var(--muted);margin-bottom:32px;}
+.narrative-box strong{color:var(--text);}
+.narrative-box em{color:var(--accent);}
+
+/* DETAIL */
+.detail-panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:32px;display:none;}
+.detail-panel.open{display:block;}
+.detail-header{display:flex;align-items:center;gap:14px;margin-bottom:24px;flex-wrap:wrap;}
+.detail-title{font-family:var(--fh);font-size:1.3rem;font-weight:800;color:#fff;}
+.detail-scores{margin-left:auto;display:flex;gap:20px;align-items:center;}
+.detail-actions{display:flex;gap:8px;}
+.detail-score-num{font-family:var(--fh);font-size:1.8rem;font-weight:800;}
+
+/* CHARTS */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;}
+.chart-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;}
+.chart-box h3{font-family:var(--fh);font-size:.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+.chart-box canvas{max-height:250px;}
+.chart-box.full{grid-column:1/-1;}
+.chart-box.full canvas{max-height:220px;}
+@media(max-width:880px){.charts-grid{grid-template-columns:1fr;}}
+
+/* EVM / RISK row */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+.kpi-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;}
+.kpi-label{font-size:.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+.kpi-val{font-family:var(--fh);font-size:1.5rem;font-weight:700;}
+.kpi-sub{font-size:.65rem;color:var(--muted);margin-top:3px;}
+
+/* TRANSPARENCY TABLE */
+.trans-sec{margin-top:24px;}
+.trans-sec h3{font-family:var(--fh);font-size:.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+.mtable{width:100%;border-collapse:collapse;font-size:.72rem;}
+.mtable th{text-align:left;color:var(--muted);padding:5px 10px;border-bottom:1px solid var(--border);font-weight:400;letter-spacing:1px;text-transform:uppercase;font-size:.6rem;}
+.mtable td{padding:7px 10px;border-bottom:1px solid rgba(31,45,69,.4);}
+.mtable tr:last-child td{border-bottom:none;}
+.pill{display:inline-flex;align-items:center;gap:5px;width:100%;}
+.pill-track{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.pill-fill{height:100%;border-radius:3px;}
+.pill-pct{width:36px;text-align:right;font-size:.65rem;color:var(--accent);}
+.fchip{display:inline-block;background:rgba(0,212,180,.06);border:1px solid rgba(0,212,180,.18);border-radius:4px;padding:1px 6px;font-size:.62rem;color:var(--accent);}
+.prox-note{background:rgba(0,212,180,.04);border:1px solid rgba(0,212,180,.12);border-radius:7px;padding:12px 14px;font-size:.7rem;color:var(--muted);margin-top:14px;line-height:1.6;}
+.prox-note strong{color:var(--accent);}
+
+/* SETTINGS MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px;width:min(700px,95vw);max-height:85vh;overflow-y:auto;}
+.modal h2{font-family:var(--fh);font-size:1rem;font-weight:700;color:#fff;margin-bottom:6px;}
+.modal-sub{font-size:.7rem;color:var(--muted);margin-bottom:20px;line-height:1.5;}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.setting-row{display:flex;flex-direction:column;gap:5px;}
+.setting-label{font-size:.65rem;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;}
+.setting-desc{font-size:.62rem;color:var(--border);color:#334155;}
+.setting-input{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--fm);font-size:.75rem;padding:7px 10px;border-radius:6px;outline:none;transition:border-color .2s;}
+.setting-input:focus{border-color:var(--accent);}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+
+/* LOADING */
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:200;font-family:var(--fh);font-size:1.1rem;color:var(--accent);}
+.spin{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:14px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* TOOLTIP */
+.has-tooltip{position:relative;cursor:help;}
+.has-tooltip .tooltip{visibility:hidden;opacity:0;position:absolute;z-index:999;background:#0f1a2e;border:1px solid var(--accent);border-radius:8px;padding:12px 14px;width:300px;font-size:.68rem;line-height:1.6;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.6);transition:opacity .15s ease;pointer-events:none;bottom:calc(100%% + 8px);left:50%%;transform:translateX(-50%%);}
+.has-tooltip .tooltip::after{content:'';position:absolute;top:100%%;left:50%%;transform:translateX(-50%%);border:6px solid transparent;border-top-color:#0f1a2e;}
+.has-tooltip:hover .tooltip{visibility:visible;opacity:1;}
+.tooltip-row{display:flex;justify-content:space-between;gap:12px;margin-bottom:3px;}
+.tooltip-row span:first-child{color:var(--muted);}
+.tooltip-row span:last-child{color:var(--accent);font-weight:600;}
+.tooltip-divider{border:none;border-top:1px solid var(--border);margin:6px 0;}
+.tooltip-formula{color:var(--muted);font-style:italic;font-size:.63rem;}
 </style>
 </head>
 <body>
-<div id="loading"><div class="spinner"></div>Loading Dashboard...</div>
+<div id="loading"><div class="spin"></div>Loading Dashboard…</div>
 
 <header>
-  <div class="logo-mark"></div>
+  <div class="logo"></div>
   <div>
     <h1>Project <span>Health</span> Dashboard</h1>
-    <div style="font-size:.7rem;color:var(--muted);margin-top:2px;">Weighted · Normalized · Time-Proximity Adjusted</div>
+    <div class="header-sub">EVM · CoV Confidence · Time-Proximity Weighted · Trend-Adjusted</div>
   </div>
-  <div class="header-meta" id="header-meta"></div>
+  <div class="header-right">
+    <span id="hdr-meta" style="font-size:.7rem;color:var(--muted)"></span>
+    <button class="btn" onclick="openSettings()">⚙ Thresholds</button>
+    <button class="btn btn-accent" onclick="exportPNG()">↓ Export PNG</button>
+    <button class="btn btn-accent" onclick="exportPDF()">↓ Export PDF</button>
+  </div>
 </header>
 
-<main>
-  <div class="section-title">Portfolio Overview — Latest Week</div>
+<main id="main-content">
+  <div class="sec-title">Portfolio Overview — Latest Week</div>
   <div class="cards-grid" id="cards-grid"></div>
 
   <div class="detail-panel" id="detail-panel">
     <div class="detail-header">
       <div>
-        <div class="detail-title" id="detail-title"></div>
-        <div style="font-size:.7rem;color:var(--muted);margin-top:4px;" id="detail-id"></div>
+        <div class="detail-title" id="d-title"></div>
+        <div style="font-size:.65rem;color:var(--muted);margin-top:3px" id="d-id"></div>
       </div>
       <div class="detail-scores">
-        <div class="detail-score-block">
-          <div class="score-label">Health Score</div>
+        <div>
+          <div class="score-label">Health</div>
           <div class="detail-score-num" id="d-health" style="color:var(--accent)"></div>
         </div>
-        <div class="detail-score-block">
+        <div>
           <div class="score-label">Confidence</div>
           <div class="detail-score-num" id="d-conf" style="color:var(--accent2)"></div>
         </div>
       </div>
+      <div class="detail-actions">
+        <button class="btn btn-accent" onclick="exportDetailPNG()">↓ PNG</button>
+      </div>
     </div>
 
+    <!-- Narrative -->
+    <div class="narrative-box" id="d-narrative"></div>
+
+    <!-- KPI Row -->
+    <div class="kpi-row" id="kpi-row"></div>
+
+    <!-- Charts -->
     <div class="charts-grid">
       <div class="chart-box">
         <h3>Health &amp; Confidence Trend</h3>
@@ -119,7 +201,7 @@
       </div>
       <div class="chart-box">
         <h3>Score Composition — Latest Week</h3>
-        <canvas id="compositionChart"></canvas>
+        <canvas id="compChart"></canvas>
       </div>
       <div class="chart-box full">
         <h3>Health Score Composition Over Time (Stacked by Metric)</h3>
@@ -127,94 +209,133 @@
       </div>
     </div>
 
-    <div class="transparency-section">
-      <h3>How the Health Score is Derived</h3>
-      <table class="metrics-table" id="metrics-table">
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Raw Value</th>
-            <th>Normalization Formula</th>
-            <th>Normalized Score</th>
-            <th>Weight (proximity-adj)</th>
-            <th>Contribution (pts)</th>
-          </tr>
-        </thead>
+    <!-- Transparency: Health Score -->
+    <div class="trans-sec">
+      <h3>📐 Health Score Derivation — Metric Breakdown</h3>
+      <table class="mtable">
+        <thead><tr>
+          <th>Metric (sorted by drag ↓)</th><th>Raw Value</th><th>Normalization Formula</th>
+          <th>Norm Score</th><th>Weight</th><th>Actual / Max (pts)</th><th>Gap (pts lost)</th>
+        </tr></thead>
         <tbody id="metrics-body"></tbody>
       </table>
-      <div class="proximity-note" id="proximity-note"></div>
+      <div class="prox-note" id="prox-note"></div>
     </div>
 
-    <div class="transparency-section" style="margin-top:20px;">
-      <h3>How the Confidence Score is Derived</h3>
-      <table class="metrics-table">
-        <thead>
-          <tr><th>Signal</th><th>Value</th><th>Penalty Formula</th><th>Penalty Applied</th></tr>
-        </thead>
+    <!-- Transparency: Confidence Score -->
+    <div class="trans-sec" style="margin-top:20px">
+      <h3>🔮 Confidence Score Derivation (CoV-Based)</h3>
+      <table class="mtable">
+        <thead><tr><th>Signal</th><th>Value</th><th>Method / Formula</th><th>Penalty Applied</th></tr></thead>
         <tbody id="conf-body"></tbody>
       </table>
     </div>
   </div>
 </main>
 
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <h2>⚙ Threshold Configuration</h2>
+    <div class="modal-sub">
+      Adjust normalization thresholds to match your project type and risk tolerance.
+      Changes re-score all projects instantly. These parameters define when a metric hits 0.0 (worst).
+    </div>
+    <div class="settings-grid" id="settings-grid"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="resetThresholds()">Reset to Defaults</button>
+      <button class="btn" onclick="closeSettings()">Cancel</button>
+      <button class="btn btn-accent" onclick="applyThresholds()">Apply &amp; Rescore</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const COLORS = ['#00d4b4','#38bdf8','#818cf8','#c084fc','#f472b6','#fb923c','#facc15','#a3e635','#34d399','#67e8f9'];
-const FORMULAS = {
-  "Schedule Variance":  "clamp((actual% - planned% + 20%) / 20%, 0, 1)",
-  "Forecast Slip":      "clamp(1 - slip_days / 140, 0, 1)",
-  "Backlog Growth":     "clamp(1 - max(0, added-closed) / 50, 0, 1)",
-  "Req. Churn":         "clamp(1 - changes_4w / 15, 0, 1)",
-  "Defect Escape Rate": "clamp(1 - escape_rate / 0.15, 0, 1)",
-  "Critical Defects":   "clamp(1 - (critical/team_size) / 2, 0, 1)",
-  "Team Churn":         "clamp(1 - churn / team_size, 0, 1)",
-  "Blocked Days":       "clamp(1 - blocked_2w / 10, 0, 1)",
-  "Unplanned Work":     "clamp(1 - unplanned_ratio / 0.6, 0, 1)",
-  "Dependencies":       "clamp(1 - dep_count / 15, 0, 1)",
+const COLORS=['#00d4b4','#38bdf8','#818cf8','#c084fc','#f472b6','#fb923c','#facc15','#a3e635','#34d399','#67e8f9','#f43f5e','#84cc16','#06b6d4'];
+const FORMULAS={
+  "Schedule Variance":  "clamp((actual% − planned% + lag_max) / lag_max, 0,1)",
+  "Forecast Slip":      "clamp(1 − slip_days / slip_max, 0,1)",
+  "Backlog Growth":     "clamp(1 − max(0, added−closed) / net_backlog_max, 0,1)",
+  "Req. Churn":         "clamp(1 − changes_4w / req_churn_max, 0,1)",
+  "Defect Escape Rate": "clamp(1 − escape_rate / escape_max, 0,1)",
+  "Critical Defects":   "clamp(1 − (critical/team_size) / crit_ratio, 0,1)",
+  "Team Churn":         "clamp(1 − churn / team_size, 0,1)",
+  "Blocked Days":       "clamp(1 − blocked_2w / blocked_max, 0,1)",
+  "Unplanned Work":     "clamp(1 − unplanned / unplanned_max, 0,1)",
+  "Dependencies":       "clamp(1 − dep_count / dep_max, 0,1)",
+  "CPI (Cost)":         "clamp((CPI − cpi_floor) / (1 − cpi_floor), 0,1)",
+  "SPI (Schedule)":     "clamp((SPI − spi_floor) / (1 − spi_floor), 0,1)",
+  "Milestone Rate":     "clamp((hit/planned − ms_floor) / (1 − ms_floor), 0,1)",
 };
 
-let charts = {}, allData = null;
+const THRESHOLD_META={
+  sched_lag_max:    {label:"Schedule Lag Max",        desc:"% behind plan = score 0.0",             unit:"%→decimal"},
+  slip_days_max:    {label:"Forecast Slip Max (days)", desc:"Days of slip = score 0.0",              unit:"days"},
+  net_backlog_max:  {label:"Net Backlog Max",          desc:"Net new items/4w = score 0.0",          unit:"items"},
+  req_churn_max:    {label:"Req. Churn Max",           desc:"Req changes/4w = score 0.0",            unit:"changes"},
+  defect_escape_max:{label:"Defect Escape Max",        desc:"Escape rate ceiling",                   unit:"rate 0–1"},
+  crit_defect_ratio:{label:"Crit Defect Ratio",        desc:"Critical defects/team ceiling",         unit:"ratio"},
+  blocked_days_max: {label:"Blocked Days Max",         desc:"Blocked days/2w = score 0.0",           unit:"days"},
+  unplanned_max:    {label:"Unplanned Work Max",       desc:"Unplanned ratio ceiling",               unit:"ratio 0–1"},
+  dep_count_max:    {label:"Dependency Count Max",     desc:"Dependency count = score 0.0",          unit:"count"},
+  cpi_floor:        {label:"CPI Floor",                desc:"CPI below this = score 0.0",            unit:"index"},
+  spi_floor:        {label:"SPI Floor",                desc:"SPI below this = score 0.0",            unit:"index"},
+  milestone_floor:  {label:"Milestone Hit Rate Floor", desc:"Hit rate below this = score 0.0",       unit:"ratio 0–1"},
+};
 
-function statusBadge(s){
-  if(s>=70) return['HEALTHY','good'];
-  if(s>=45) return['AT RISK','warn'];
-  return['CRITICAL','danger'];
-}
+let charts={}, allData=null, currentThresholds={}, currentPid=null;
+
 function scoreColor(s){
-  if(s>=70) return 'var(--green)';
-  if(s>=45) return 'var(--warn)';
-  return 'var(--danger)';
+  if(s>=75) return'var(--green)';
+  if(s>=50) return'var(--warn)';
+  return'var(--danger)';
+}
+function statusClass(s){ return s>=75?'good':s>=50?'warn':'danger'; }
+function statusLabel(s){ return s>=75?'HEALTHY':s>=50?'AT RISK':'CRITICAL'; }
+
+function deltaHtml(d){
+  if(d===0||d===null) return`<span class="delta-badge delta-flat">→ 0.0</span>`;
+  if(d>0) return`<span class="delta-badge delta-up">▲ +${d}</span>`;
+  return`<span class="delta-badge delta-down">▼ ${d}</span>`;
 }
 
 function buildCards(summaries){
-  const grid = document.getElementById('cards-grid');
-  grid.innerHTML = '';
-  summaries.forEach(s => {
-    const [label,cls] = statusBadge(s.health_score);
-    const hc = scoreColor(s.health_score), cc = scoreColor(s.confidence_score);
-    const d = document.createElement('div');
-    d.className='card'; d.dataset.pid=s.project_id;
-    d.innerHTML = `
+  const grid=document.getElementById('cards-grid');
+  grid.innerHTML='';
+  summaries.forEach(s=>{
+    const cls=statusClass(s.health_score), hc=scoreColor(s.health_score), cc=scoreColor(s.confidence_score);
+    const raw=s.raw;
+    const cpiStr=raw.cpi!=null?`CPI <strong>${raw.cpi.toFixed(2)}</strong>`:'';
+    const spiStr=raw.spi!=null?`SPI <strong>${raw.spi.toFixed(2)}</strong>`:'';
+    const riskCls=raw.risks_high>=5?'danger':raw.risks_high>=2?'warn':'';
+    const msCls=raw.milestones_planned&&(raw.milestones_hit/raw.milestones_planned)<0.7?'warn':'';
+    const d=document.createElement('div');
+    d.className=`card ${cls}`; d.dataset.pid=s.project_id;
+    d.innerHTML=`
       <div class="card-header">
         <div><div class="card-name">${s.project_name}</div><div class="card-id">${s.project_id}</div></div>
-        <span class="badge badge-${cls}">${label}</span>
+        <span class="badge badge-${cls}">${statusLabel(s.health_score)}</span>
       </div>
       <div class="scores-row">
         <div class="score-block">
-          <div class="score-label">Health Score</div>
-          <div class="score-value" style="color:${hc}">${s.health_score}<span class="score-unit">/100</span></div>
-          <div class="mini-bar"><div class="mini-bar-fill" style="width:${s.health_score}%;background:${hc}"></div></div>
+          <div class="score-label">Health</div>
+          <div class="score-val" style="color:${hc}">${s.health_score}<span class="score-sub">/100</span></div>
+          <div class="mini-bar"><div class="mini-fill" style="width:${s.health_score}%;background:${hc}"></div></div>
+          ${deltaHtml(s.trend_delta)}
         </div>
         <div class="score-block">
           <div class="score-label">Confidence</div>
-          <div class="score-value" style="color:${cc}">${s.confidence_score}<span class="score-unit">/100</span></div>
-          <div class="mini-bar"><div class="mini-bar-fill" style="width:${s.confidence_score}%;background:${cc}"></div></div>
+          <div class="score-val" style="color:${cc}">${s.confidence_score}<span class="score-sub">/100</span></div>
+          <div class="mini-bar"><div class="mini-fill" style="width:${s.confidence_score}%;background:${cc}"></div></div>
         </div>
       </div>
-      <div class="card-meta">
-        <div class="card-meta-item">Schedule: <strong>${s.raw.sched_var_pct>0?'+':''}${s.raw.sched_var_pct}%</strong></div>
-        <div class="card-meta-item">Slip: <strong>${s.raw.slip_days}d</strong></div>
-        <div class="card-meta-item">Critical Defects: <strong>${s.raw.critical_defects}</strong></div>
-        <div class="card-meta-item">Proximity: <strong>${s.raw.proximity_pct}%</strong></div>
+      <div class="card-chips">
+        <div class="chip">Schedule <strong>${raw.sched_var_pct>0?'+':''}${raw.sched_var_pct}%</strong></div>
+        <div class="chip">Slip <strong>${raw.slip_days}d</strong></div>
+        ${cpiStr?`<div class="chip">${cpiStr}</div>`:''}
+        ${spiStr?`<div class="chip">${spiStr}</div>`:''}
+        ${raw.risks_high>0?`<div class="chip ${riskCls}">${raw.risks_high} high risks</div>`:''}
+        ${raw.milestones_planned?`<div class="chip ${msCls}">MS ${raw.milestones_hit}/${raw.milestones_planned}</div>`:''}
       </div>`;
     d.addEventListener('click',()=>openDetail(s.project_id));
     grid.appendChild(d);
@@ -223,127 +344,291 @@ function buildCards(summaries){
 
 function openDetail(pid){
   document.querySelectorAll('.card').forEach(c=>c.classList.toggle('active',c.dataset.pid===pid));
-  const series  = allData.series.find(s=>s.project_id===pid);
-  const summary = allData.summaries.find(s=>s.project_id===pid);
-  const panel   = document.getElementById('detail-panel');
+  currentPid=pid;
+  const series=allData.series.find(s=>s.project_id===pid);
+  const summ=allData.summaries.find(s=>s.project_id===pid);
+  const panel=document.getElementById('detail-panel');
   panel.classList.add('open');
   panel.scrollIntoView({behavior:'smooth',block:'start'});
-  document.getElementById('detail-title').textContent = series.project_name;
-  document.getElementById('detail-id').textContent    = pid;
-  document.getElementById('d-health').textContent     = summary.health_score+'/100';
-  document.getElementById('d-conf').textContent       = summary.confidence_score+'/100';
-  Object.values(charts).forEach(c=>c.destroy());
-  charts={};
+
+  document.getElementById('d-title').textContent=series.project_name;
+  document.getElementById('d-id').textContent=pid;
+  document.getElementById('d-health').textContent=summ.health_score+'/100';
+  document.getElementById('d-conf').textContent=summ.confidence_score+'/100';
+  document.getElementById('d-narrative').innerHTML=renderMarkdown(summ.narrative);
+
+  buildKPIs(summ.raw);
+  Object.values(charts).forEach(c=>c.destroy()); charts={};
   buildTrend(series);
-  buildComposition(summary);
+  buildComp(summ);
   buildStacked(series);
-  buildMetrics(summary);
-  buildConf(summary);
+  buildMetrics(summ);
+  buildConf(summ);
+}
+
+function renderMarkdown(text){
+  return text
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>');
+}
+
+function kpiTooltip(label, raw){
+  if(label==='CPI'){
+    const ev=raw.ev, pv=raw.pv, ac=raw.ac;
+    return `<div class="tooltip">
+      <strong style="color:#00d4b4">Cost Performance Index (CPI)</strong>
+      <hr class="tooltip-divider"/>
+      <div class="tooltip-row"><span>Earned Value (EV)</span><span>$${(ev/1000).toFixed(1)}K</span></div>
+      <div class="tooltip-row"><span>Actual Cost (AC)</span><span>$${(ac/1000).toFixed(1)}K</span></div>
+      <div class="tooltip-row"><span>Planned Value (PV)</span><span>$${(pv/1000).toFixed(1)}K</span></div>
+      <hr class="tooltip-divider"/>
+      <div class="tooltip-row"><span>CPI = EV ÷ AC</span><span>${raw.cpi.toFixed(3)}</span></div>
+      <div class="tooltip-formula">&lt;1.0 = over budget · &gt;1.0 = under budget<br/>EV = actual% × PV ÷ planned%</div>
+    </div>`;
+  }
+  if(label==='SPI'){
+    const ev=raw.ev, pv=raw.pv;
+    return `<div class="tooltip">
+      <strong style="color:#00d4b4">Schedule Performance Index (SPI)</strong>
+      <hr class="tooltip-divider"/>
+      <div class="tooltip-row"><span>Earned Value (EV)</span><span>$${(ev/1000).toFixed(1)}K</span></div>
+      <div class="tooltip-row"><span>Planned Value (PV)</span><span>$${(pv/1000).toFixed(1)}K</span></div>
+      <hr class="tooltip-divider"/>
+      <div class="tooltip-row"><span>SPI = EV ÷ PV</span><span>${raw.spi.toFixed(3)}</span></div>
+      <div class="tooltip-formula">&lt;1.0 = behind schedule · &gt;1.0 = ahead<br/>EV = actual% × PV ÷ planned%</div>
+    </div>`;
+  }
+  if(label==='Forecast CoV'){
+    const hist=raw.slip_history||[];
+    const histStr=hist.map(d=>d+'d').join(' → ');
+    return `<div class="tooltip">
+      <strong style="color:#00d4b4">Forecast Coefficient of Variation</strong>
+      <hr class="tooltip-divider"/>
+      <div class="tooltip-row"><span>Slip history (4w)</span><span>${histStr}</span></div>
+      <div class="tooltip-row"><span>CoV = σ ÷ |μ|</span><span>${raw.cov.toFixed(3)}</span></div>
+      <hr class="tooltip-divider"/>
+      <div class="tooltip-formula">Measures how stable your forecast end date is.<br/>High CoV = forecast is moving a lot week-to-week.<br/>0.0–0.1 = stable · 0.1–0.3 = moderate · &gt;0.3 = volatile</div>
+    </div>`;
+  }
+  return '';
+}
+
+function buildKPIs(raw){
+  const row=document.getElementById('kpi-row');
+  const kpis=[];
+  if(raw.cpi!=null){
+    const cc=raw.cpi>=1?'var(--green)':raw.cpi>=0.85?'var(--warn)':'var(--danger)';
+    kpis.push({label:'CPI',val:raw.cpi.toFixed(2),sub:'Cost Performance Index',color:cc,tip:true});
+    const sc=raw.spi>=1?'var(--green)':raw.spi>=0.85?'var(--warn)':'var(--danger)';
+    kpis.push({label:'SPI',val:raw.spi.toFixed(2),sub:'Schedule Performance Index',color:sc,tip:true});
+    const cost_var=raw.actual_cost-raw.planned_cost;
+    const cv_c=cost_var>0?'var(--danger)':'var(--green)';
+    kpis.push({label:'Cost Variance',val:`$${Math.abs(cost_var/1000).toFixed(0)}K`,sub:cost_var>0?'Over budget':'Under budget',color:cv_c});
+  }
+  if(raw.milestones_planned){
+    const rate=Math.round(raw.milestones_hit/raw.milestones_planned*100);
+    const mc=rate>=80?'var(--green)':rate>=60?'var(--warn)':'var(--danger)';
+    kpis.push({label:'Milestone Rate',val:rate+'%',sub:`${raw.milestones_hit}/${raw.milestones_planned} achieved`,color:mc});
+  }
+  if(raw.risks_open>0){
+    const rc=raw.risks_high>=5?'var(--danger)':raw.risks_high>=2?'var(--warn)':'var(--green)';
+    kpis.push({label:'Open Risks',val:raw.risks_open,sub:`${raw.risks_high} high severity`,color:rc});
+  }
+  kpis.push({label:'Forecast Slip',val:raw.slip_days+'d',sub:'Days beyond planned end',color:raw.slip_days>30?'var(--danger)':raw.slip_days>0?'var(--warn)':'var(--green)'});
+  kpis.push({label:'Forecast CoV',val:raw.cov.toFixed(3),sub:'Forecast volatility',color:raw.cov>0.3?'var(--danger)':raw.cov>0.1?'var(--warn)':'var(--green)',tip:true});
+
+  row.innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.tip?'has-tooltip':''}">
+      ${k.tip?kpiTooltip(k.label,raw):''}
+      <div class="kpi-label">${k.label}${k.tip?' <span style="color:var(--muted);font-size:.6rem">ⓘ</span>':''}</div>
+      <div class="kpi-val" style="color:${k.color}">${k.val}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>`).join('');
 }
 
 function buildTrend(series){
   const ctx=document.getElementById('trendChart').getContext('2d');
   charts.trend=new Chart(ctx,{type:'line',data:{labels:series.weeks,datasets:[
-    {label:'Health Score',data:series.health,borderColor:'#00d4b4',backgroundColor:'rgba(0,212,180,.1)',borderWidth:2.5,tension:0.4,fill:true,pointRadius:4,pointBackgroundColor:'#00d4b4'},
-    {label:'Confidence',data:series.confidence,borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.08)',borderWidth:2.5,tension:0.4,fill:true,pointRadius:4,pointBackgroundColor:'#f97316'}
+    {label:'Health',data:series.health,borderColor:'#00d4b4',backgroundColor:'rgba(0,212,180,.1)',borderWidth:2.5,tension:.4,fill:true,pointRadius:4,pointBackgroundColor:'#00d4b4'},
+    {label:'Confidence',data:series.confidence,borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.08)',borderWidth:2.5,tension:.4,fill:true,pointRadius:4,pointBackgroundColor:'#f97316'}
   ]},options:{responsive:true,maintainAspectRatio:true,
     scales:{y:{min:0,max:100,grid:{color:'#1f2d45'},ticks:{color:'#64748b',font:{family:'DM Mono'}}},
             x:{grid:{color:'#1f2d45'},ticks:{color:'#64748b',font:{family:'DM Mono',size:10}}}},
     plugins:{legend:{labels:{color:'#94a3b8',font:{family:'DM Mono'}}}}}});
 }
 
-function buildComposition(summary){
-  const keys=Object.keys(summary.contributions);
-  const vals=keys.map(k=>summary.contributions[k]);
-  const ctx=document.getElementById('compositionChart').getContext('2d');
+function buildComp(summ){
+  const keys=Object.keys(summ.contributions);
+  const vals=keys.map(k=>summ.contributions[k]);
+  const ctx=document.getElementById('compChart').getContext('2d');
   charts.comp=new Chart(ctx,{type:'doughnut',data:{labels:keys,datasets:[{data:vals,backgroundColor:COLORS,borderWidth:2,borderColor:'#111827'}]},
-    options:{responsive:true,maintainAspectRatio:true,cutout:'60%',
-      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:8}},
+    options:{responsive:true,maintainAspectRatio:true,cutout:'58%',
+      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:7}},
                tooltip:{callbacks:{label:c=>` ${c.label}: ${c.parsed.toFixed(1)} pts`}}}}});
 }
 
 function buildStacked(series){
   const keys=Object.keys(series.contributions_by_week[0]);
-  const datasets=keys.map((key,i)=>({label:key,data:series.contributions_by_week.map(w=>w[key]),backgroundColor:COLORS[i],borderWidth:0}));
+  const datasets=keys.map((k,i)=>({label:k,data:series.contributions_by_week.map(w=>w[k]),backgroundColor:COLORS[i],borderWidth:0}));
   const ctx=document.getElementById('stackedChart').getContext('2d');
   charts.stacked=new Chart(ctx,{type:'bar',data:{labels:series.weeks,datasets},
     options:{responsive:true,maintainAspectRatio:true,
       scales:{x:{stacked:true,grid:{color:'#1f2d45'},ticks:{color:'#64748b',font:{family:'DM Mono',size:10}}},
               y:{stacked:true,min:0,max:100,grid:{color:'#1f2d45'},ticks:{color:'#64748b',font:{family:'DM Mono'}}}},
-      plugins:{legend:{labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:6}},
+      plugins:{legend:{labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:5}},
                tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)} pts`}}}}});
 }
 
-function buildMetrics(summary){
+function buildMetrics(summ){
   const body=document.getElementById('metrics-body');
   body.innerHTML='';
-  const raw=summary.raw;
+  const raw=summ.raw;
+  const maxC=summ.max_contributions;
   const rawMap={
-    "Schedule Variance": `Actual ${raw.pct_complete}% vs Planned ${raw.planned_pct}% (var = ${raw.sched_var_pct>0?'+':''}${raw.sched_var_pct}%)`,
+    "Schedule Variance": `Actual ${raw.pct_complete}% vs Planned ${raw.planned_pct}% (var ${raw.sched_var_pct>0?'+':''}${raw.sched_var_pct}%)`,
     "Forecast Slip":     `${raw.slip_days} days beyond planned end`,
-    "Backlog Growth":    `Items added vs closed (net churn)`,
-    "Req. Churn":        `${raw.req_churn} requirement changes in 4 weeks`,
+    "Backlog Growth":    `Net added vs closed per 4w`,
+    "Req. Churn":        `${raw.req_churn} req changes / 4 weeks`,
     "Defect Escape Rate":`${raw.defect_escape}% escape rate`,
-    "Critical Defects":  `${raw.critical_defects} critical open defects`,
-    "Team Churn":        `${raw.team_churn} member(s) left in 4 weeks`,
-    "Blocked Days":      `${raw.blocked_days} blocked days (past 2 weeks)`,
+    "Critical Defects":  `${raw.critical_defects} critical defects open`,
+    "Team Churn":        `${raw.team_churn} members left / 4 weeks`,
+    "Blocked Days":      `${raw.blocked_days} blocked days (2 weeks)`,
     "Unplanned Work":    `${raw.unplanned_pct}% of work unplanned`,
-    "Dependencies":      `${raw.dependencies} active dependencies`,
+    "Dependencies":      `${raw.dependencies} active deps`,
+    "CPI (Cost)":        raw.cpi!=null?`EV=$${(raw.ev/1000).toFixed(1)}K, AC=$${(raw.ac/1000).toFixed(1)}K → CPI=${raw.cpi.toFixed(3)}`:'N/A',
+    "SPI (Schedule)":    raw.spi!=null?`EV=$${(raw.ev/1000).toFixed(1)}K, PV=$${(raw.pv/1000).toFixed(1)}K → SPI=${raw.spi.toFixed(3)}`:'N/A',
+    "Milestone Rate":    raw.milestones_planned?`${raw.milestones_hit}/${raw.milestones_planned} milestones hit`:'N/A',
   };
-  const total=Object.values(summary.contributions).reduce((a,b)=>a+b,0);
-  const keys=Object.keys(summary.contributions);
-  keys.forEach((key,i)=>{
-    const contrib=summary.contributions[key];
-    const normPct=Math.round((contrib/total)*100);
+
+  // Gap = points lost vs potential (max - actual). Sort by gap descending = biggest drags first.
+  const gaps = {};
+  Object.keys(summ.contributions).forEach(k => {
+    gaps[k] = (maxC[k]||0) - summ.contributions[k];
+  });
+  const sortedKeys = Object.keys(summ.contributions).sort((a,b)=>gaps[b]-gaps[a]);
+
+  sortedKeys.forEach((key,i)=>{
+    const origIdx = Object.keys(summ.contributions).indexOf(key);
+    const c   = summ.contributions[key];
+    const mx  = maxC[key]||0;
+    const gap = gaps[key];
+    const normPct = mx>0 ? Math.round((c/mx)*100) : 100;
+    const gapPct  = mx>0 ? Math.round((gap/mx)*100) : 0;
+    const gapColor = gapPct>40?'var(--danger)':gapPct>15?'var(--warn)':'var(--green)';
     const tr=document.createElement('tr');
     tr.innerHTML=`
-      <td style="color:${COLORS[i]};font-weight:500">${key}</td>
+      <td style="color:${COLORS[origIdx]};font-weight:500">${key}</td>
       <td style="color:var(--muted);font-size:.68rem">${rawMap[key]||'—'}</td>
-      <td><span class="formula-chip">${FORMULAS[key]||''}</span></td>
-      <td>
-        <div class="pill-bar">
-          <div class="pill-bar-track"><div class="pill-bar-fill" style="width:${normPct}%;background:${COLORS[i]}"></div></div>
-          <div class="pill-bar-pct">${normPct}%</div>
-        </div>
-      </td>
-      <td style="color:var(--muted);font-size:.68rem">dynamic (proximity=${raw.proximity_pct}%)</td>
-      <td style="color:${COLORS[i]};font-weight:600">${contrib.toFixed(1)} pts</td>`;
+      <td><span class="fchip">${FORMULAS[key]||'—'}</span></td>
+      <td><div class="pill"><div class="pill-track"><div class="pill-fill" style="width:${normPct}%;background:${COLORS[origIdx]}"></div></div><div class="pill-pct">${normPct}%</div></div></td>
+      <td style="color:var(--muted);font-size:.65rem">prox-adj (${raw.proximity_pct}%)</td>
+      <td style="color:${COLORS[origIdx]};font-weight:600">${c.toFixed(1)}<span style="color:var(--muted)">/${mx.toFixed(1)}</span></td>
+      <td style="color:${gapColor};font-weight:600">${gap>0.05?'−'+gap.toFixed(1)+' pts':'✓ full'}</td>`;
     body.appendChild(tr);
   });
-
-  document.getElementById('proximity-note').innerHTML=`
+  document.getElementById('prox-note').innerHTML=`
     <strong>Time-Proximity Adjustment:</strong> This project is <strong>${raw.proximity_pct}%</strong> through
-    its lifecycle (proximity factor = ${(raw.proximity_pct/100).toFixed(2)}). As a project nears completion,
-    <em>Schedule Variance</em>, <em>Forecast Slip</em>, and <em>Quality</em> metrics receive elevated weights
-    because late-stage slippage is harder to recover and defects cost progressively more to fix. Conversely,
-    <em>Unplanned Work</em> and <em>Dependencies</em> weights taper — the impact of new scope is diminishing.
-    All weights are renormalized to sum to 1.0 after adjustment, ensuring the health score always reflects
-    a true 0–100 scale.`;
+    its lifecycle. Schedule, Quality, and EVM metrics receive increasing weight as the project nears completion —
+    late-stage slippage is harder to recover and defects cost more to fix. Weights are renormalized to sum to 1.0
+    after adjustment, keeping the health score on a true 0–100 scale.
+    <br/><br/><strong>Table is sorted by gap (points lost)</strong> — metrics at the top are the biggest drag on health.`;
 }
 
-function buildConf(summary){
+function buildConf(summ){
   const body=document.getElementById('conf-body');
   body.innerHTML='';
-  const raw=summary.raw;
-  const slipP=(Math.max(0,raw.slip_days)*0.4).toFixed(1);
-  const churnP=(raw.req_churn*1.5).toFixed(1);
+  const raw=summ.raw;
   const rows=[
-    ['Forecast Slip',`${raw.slip_days} days`,'slip_days × 0.4',`-${slipP} pts`],
-    ['Requirements Churn',`${raw.req_churn} changes/4w`,'req_changes × 1.5',`-${churnP} pts`],
-    ['Backlog Net Growth','(added − closed)','net_backlog × 0.8','varies'],
-    ['Final Confidence Score','—','100 − Σ(penalties), clamped 0–100',`${summary.confidence_score}/100`],
+    ['Forecast Volatility (CoV)',`CoV = ${raw.cov.toFixed(3)} over rolling 4-week window`,'CoV/0.5 × 40 pts penalty',`−${raw.cov_penalty.toFixed(1)} pts`],
+    ['Requirements Churn',`${raw.req_churn} changes/4w`,'changes × 1.0',`−${raw.churn_penalty.toFixed(1)} pts`],
+    ['Backlog Net Growth','added − closed/4w','net_backlog × 0.5',`−${raw.backlog_penalty.toFixed(1)} pts`],
+    ['Forecast Slip',`${raw.slip_days} days`,'slip_days × 0.25',`−${raw.slip_penalty.toFixed(1)} pts`],
+    ['Final Confidence','—','100 − Σ penalties, clamped [0,100]',`<strong style="color:var(--accent2)">${summ.confidence_score}/100</strong>`],
   ];
-  rows.forEach(([sig,val,formula,penalty])=>{
+  rows.forEach(([s,v,f,p])=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text)">${sig}</td><td style="color:var(--accent2)">${val}</td><td><span class="formula-chip">${formula}</span></td><td style="color:var(--warn)">${penalty}</td>`;
+    tr.innerHTML=`<td style="color:var(--text)">${s}</td><td style="color:var(--accent2)">${v}</td><td><span class="fchip">${f}</span></td><td style="color:var(--warn)">${p}</td>`;
     body.appendChild(tr);
   });
 }
 
+// ── SETTINGS ──────────────────────────────────────────
+function openSettings(){
+  const grid=document.getElementById('settings-grid');
+  grid.innerHTML='';
+  Object.entries(THRESHOLD_META).forEach(([key,meta])=>{
+    const val=currentThresholds[key]??'';
+    grid.innerHTML+=`
+      <div class="setting-row">
+        <div class="setting-label">${meta.label}</div>
+        <div class="setting-desc">${meta.desc} (${meta.unit})</div>
+        <input class="setting-input" type="number" step="any" id="th_${key}" value="${val}"/>
+      </div>`;
+  });
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettings(){ document.getElementById('settings-modal').classList.remove('open'); }
+function resetThresholds(){
+  Object.entries(THRESHOLD_META).forEach(([key])=>{
+    const el=document.getElementById('th_'+key);
+    if(el && defaultThresholds[key]!=null) el.value=defaultThresholds[key];
+  });
+}
+let defaultThresholds={};
+function applyThresholds(){
+  const params=new URLSearchParams();
+  Object.keys(THRESHOLD_META).forEach(key=>{
+    const el=document.getElementById('th_'+key);
+    if(el&&el.value) params.set(key,el.value);
+  });
+  closeSettings();
+  document.getElementById('loading').style.display='flex';
+  fetch('/api/data?'+params.toString()).then(r=>r.json()).then(data=>{
+    document.getElementById('loading').style.display='none';
+    allData=data; currentThresholds=data.thresholds;
+    buildCards(data.summaries);
+    if(currentPid) openDetail(currentPid);
+  });
+}
+
+// ── EXPORT ────────────────────────────────────────────
+function exportPNG(){
+  html2canvas(document.getElementById('main-content'),{backgroundColor:'#0b0f1a',scale:2}).then(canvas=>{
+    const a=document.createElement('a'); a.download='project-health-dashboard.png';
+    a.href=canvas.toDataURL('image/png'); a.click();
+  });
+}
+function exportDetailPNG(){
+  const panel=document.getElementById('detail-panel');
+  if(!panel.classList.contains('open')) return;
+  html2canvas(panel,{backgroundColor:'#111827',scale:2}).then(canvas=>{
+    const a=document.createElement('a'); a.download=`project-detail-${currentPid}.png`;
+    a.href=canvas.toDataURL('image/png'); a.click();
+  });
+}
+function exportPDF(){
+  html2canvas(document.getElementById('main-content'),{backgroundColor:'#0b0f1a',scale:1.5}).then(canvas=>{
+    const img=canvas.toDataURL('image/png');
+    const w=window.open('','_blank');
+    w.document.write(`<!DOCTYPE html><html><head><title>Project Health Dashboard</title>
+      <style>body{margin:0;}img{width:100%;}</style></head>
+      <body><img src="${img}" onload="window.print()"/></body></html>`);
+    w.document.close();
+  });
+}
+
+// Close modal on overlay click
+document.getElementById('settings-modal').addEventListener('click',e=>{
+  if(e.target===e.currentTarget) closeSettings();
+});
+
+// ── INIT ──────────────────────────────────────────────
 fetch('/api/data').then(r=>r.json()).then(data=>{
   allData=data;
+  currentThresholds=data.thresholds;
+  defaultThresholds=Object.assign({},data.thresholds);
   document.getElementById('loading').style.display='none';
-  document.getElementById('header-meta').textContent=`${data.summaries.length} Projects · ${data.series[0]?.weeks.length} Weeks`;
+  document.getElementById('hdr-meta').textContent=`${data.summaries.length} Projects`;
   buildCards(data.summaries);
   if(data.summaries.length>0) openDetail(data.summaries[0].project_id);
 });

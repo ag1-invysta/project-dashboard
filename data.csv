@@ -1,15 +1,15 @@
-project_id,project_name,week_ending,planned_end_date,forecast_end_date,planned_percent_complete,actual_percent_complete,backlog_items_added_last_4w,backlog_items_closed_last_4w,requirements_changed_last_4w,defects_open,defects_open_critical,defect_escape_rate_last_4w,blocked_days_last_2w,dependency_count,team_size,team_churn_last_4w,unplanned_work_ratio_last_4w
-P-1001,Payments Modernization,2026-02-07,2026-06-30,2026-07-10,0.35,0.30,22,12,6,55,7,0.08,5,7,10,1,0.35
-P-1001,Payments Modernization,2026-02-14,2026-06-30,2026-07-15,0.40,0.33,26,13,7,54,6,0.07,5,7,10,1,0.34
-P-1001,Payments Modernization,2026-02-21,2026-06-30,2026-07-20,0.45,0.38,28,14,7,52,6,0.07,4,7,10,1,0.32
-P-1001,Payments Modernization,2026-02-28,2026-06-30,2026-07-18,0.50,0.44,20,18,5,46,4,0.05,3,6,10,0,0.28
+project_id,project_name,week_ending,planned_end_date,forecast_end_date,planned_percent_complete,actual_percent_complete,backlog_items_added_last_4w,backlog_items_closed_last_4w,requirements_changed_last_4w,defects_open,defects_open_critical,defect_escape_rate_last_4w,blocked_days_last_2w,dependency_count,team_size,team_churn_last_4w,unplanned_work_ratio_last_4w,planned_cost_to_date,actual_cost_to_date,milestones_planned_to_date,milestones_hit,risks_open,risks_high
+P-1001,Payments Modernization,2026-02-07,2026-06-30,2026-07-10,0.35,0.30,22,12,6,55,7,0.08,5,7,10,1,0.35,280000,310000,4,3,8,3
+P-1001,Payments Modernization,2026-02-14,2026-06-30,2026-07-15,0.40,0.33,26,13,7,54,6,0.07,5,7,10,1,0.34,320000,358000,5,3,9,3
+P-1001,Payments Modernization,2026-02-21,2026-06-30,2026-07-20,0.45,0.38,28,14,7,52,6,0.07,4,7,10,1,0.32,360000,395000,6,5,8,2
+P-1001,Payments Modernization,2026-02-28,2026-06-30,2026-07-18,0.50,0.44,20,18,5,46,4,0.05,3,6,10,0,0.28,400000,428000,7,6,7,2
 
-P-1002,Mobile App Reliability,2026-02-07,2026-05-15,2026-05-20,0.58,0.56,10,11,2,22,2,0.03,2,3,8,0,0.14
-P-1002,Mobile App Reliability,2026-02-14,2026-05-15,2026-05-19,0.62,0.63,9,12,2,20,1,0.02,1,3,8,0,0.12
-P-1002,Mobile App Reliability,2026-02-21,2026-05-15,2026-05-18,0.65,0.66,8,12,2,18,1,0.02,1,3,8,0,0.12
-P-1002,Mobile App Reliability,2026-02-28,2026-05-15,2026-05-16,0.70,0.72,6,13,1,14,0,0.01,0,2,8,0,0.10
+P-1002,Mobile App Reliability,2026-02-07,2026-05-15,2026-05-20,0.58,0.56,10,11,2,22,2,0.03,2,3,8,0,0.14,232000,238000,6,5,3,1
+P-1002,Mobile App Reliability,2026-02-14,2026-05-15,2026-05-19,0.62,0.63,9,12,2,20,1,0.02,1,3,8,0,0.12,248000,249000,7,7,3,0
+P-1002,Mobile App Reliability,2026-02-21,2026-05-15,2026-05-18,0.65,0.66,8,12,2,18,1,0.02,1,3,8,0,0.12,260000,259000,8,8,2,0
+P-1002,Mobile App Reliability,2026-02-28,2026-05-15,2026-05-16,0.70,0.72,6,13,1,14,0,0.01,0,2,8,0,0.10,280000,276000,9,9,2,0
 
-P-1003,Data Platform Migration,2026-02-07,2026-08-15,2026-09-15,0.22,0.16,45,16,14,78,12,0.12,7,12,12,2,0.52
-P-1003,Data Platform Migration,2026-02-14,2026-08-15,2026-09-25,0.26,0.18,42,17,13,74,11,0.11,7,12,12,2,0.50
-P-1003,Data Platform Migration,2026-02-21,2026-08-15,2026-10-01,0.30,0.22,40,18,12,70,10,0.11,6,11,12,2,0.48
-P-1003,Data Platform Migration,2026-02-28,2026-08-15,2026-10-05,0.34,0.24,38,20,11,68,9,0.10,6,11,12,2,0.46
+P-1003,Data Platform Migration,2026-02-07,2026-08-15,2026-09-15,0.22,0.16,45,16,14,78,12,0.12,7,12,12,2,0.52,176000,198000,3,1,14,6
+P-1003,Data Platform Migration,2026-02-14,2026-08-15,2026-09-25,0.26,0.18,42,17,13,74,11,0.11,7,12,12,2,0.50,208000,238000,4,1,15,7
+P-1003,Data Platform Migration,2026-02-21,2026-08-15,2026-10-01,0.30,0.22,40,18,12,70,10,0.11,6,11,12,2,0.48,240000,278000,5,2,15,7
+P-1003,Data Platform Migration,2026-02-28,2026-08-15,2026-10-05,0.34,0.24,38,20,11,68,9,0.10,6,11,12,2,0.46,272000,315000,6,2,16,8
