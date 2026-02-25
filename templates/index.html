@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Project Health Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f1a; --panel: #111827; --border: #1f2d45;
+    --accent: #00d4b4; --accent2: #f97316; --warn: #facc15;
+    --danger: #ef4444; --text: #e2e8f0; --muted: #64748b; --green: #22c55e;
+    --font-head: 'Syne', sans-serif; --font-mono: 'DM Mono', monospace;
+    --c1:#00d4b4;--c2:#38bdf8;--c3:#818cf8;--c4:#c084fc;--c5:#f472b6;
+    --c6:#fb923c;--c7:#facc15;--c8:#a3e635;--c9:#34d399;--c10:#67e8f9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;}
+  header{padding:28px 40px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#0b0f1a 0%,#111c2e 100%);}
+  .logo-mark{width:42px;height:42px;background:var(--accent);clip-path:polygon(50% 0%,100% 100%,0% 100%);}
+  header h1{font-family:var(--font-head);font-size:1.5rem;font-weight:800;letter-spacing:-0.5px;color:#fff;}
+  header span{color:var(--accent);}
+  .header-meta{margin-left:auto;color:var(--muted);font-size:0.75rem;}
+  main{padding:32px 40px;max-width:1600px;margin:0 auto;}
+  .section-title{display:block;font-family:var(--font-head);font-size:0.7rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin-bottom:16px;}
+  .cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:40px;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;cursor:pointer;transition:border-color .2s,transform .2s;position:relative;overflow:hidden;}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);transition:height .2s;}
+  .card:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .card.active{border-color:var(--accent);}
+  .card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;}
+  .card-name{font-family:var(--font-head);font-weight:700;font-size:1rem;color:#fff;}
+  .card-id{font-size:0.7rem;color:var(--muted);margin-top:2px;}
+  .badge{font-size:0.65rem;font-weight:500;padding:3px 9px;border-radius:99px;letter-spacing:1px;}
+  .badge-good{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);}
+  .badge-warn{background:rgba(250,204,21,.12);color:var(--warn);border:1px solid rgba(250,204,21,.3);}
+  .badge-danger{background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
+  .scores-row{display:flex;gap:24px;}
+  .score-block{flex:1;}
+  .score-label{font-size:0.65rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+  .score-value{font-family:var(--font-head);font-size:2.2rem;font-weight:800;line-height:1;}
+  .score-unit{font-size:1rem;font-weight:400;color:var(--muted);}
+  .mini-bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden;}
+  .mini-bar-fill{height:100%;border-radius:2px;transition:width .8s ease;}
+  .card-meta{margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;}
+  .card-meta-item{font-size:0.68rem;color:var(--muted);}
+  .card-meta-item strong{color:var(--text);}
+  .detail-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px;margin-bottom:40px;display:none;}
+  .detail-panel.open{display:block;}
+  .detail-header{display:flex;align-items:center;gap:16px;margin-bottom:28px;flex-wrap:wrap;}
+  .detail-title{font-family:var(--font-head);font-size:1.4rem;font-weight:800;color:#fff;}
+  .detail-scores{margin-left:auto;display:flex;gap:24px;}
+  .detail-score-block{text-align:right;}
+  .detail-score-num{font-family:var(--font-head);font-size:2rem;font-weight:800;}
+  .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;}
+  .chart-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:20px;}
+  .chart-box h3{font-family:var(--font-head);font-size:0.75rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
+  .chart-box canvas{max-height:260px;}
+  .chart-box.full{grid-column:1/-1;}
+  .chart-box.full canvas{max-height:240px;}
+  .transparency-section{margin-top:28px;}
+  .transparency-section h3{font-family:var(--font-head);font-size:0.75rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
+  .metrics-table{width:100%;border-collapse:collapse;font-size:0.75rem;}
+  .metrics-table th{text-align:left;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border);font-weight:400;letter-spacing:1px;text-transform:uppercase;font-size:0.65rem;}
+  .metrics-table td{padding:8px 10px;border-bottom:1px solid rgba(31,45,69,.5);}
+  .metrics-table tr:last-child td{border-bottom:none;}
+  .pill-bar{display:inline-flex;align-items:center;gap:6px;width:100%;}
+  .pill-bar-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+  .pill-bar-fill{height:100%;border-radius:3px;}
+  .pill-bar-pct{width:42px;text-align:right;color:var(--accent);}
+  .proximity-note{background:rgba(0,212,180,.05);border:1px solid rgba(0,212,180,.15);border-radius:8px;padding:14px 16px;font-size:0.73rem;color:var(--muted);margin-top:16px;line-height:1.6;}
+  .proximity-note strong{color:var(--accent);}
+  #loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:99;font-family:var(--font-head);font-size:1.2rem;color:var(--accent);}
+  .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:16px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .formula-chip{display:inline-block;background:rgba(0,212,180,.08);border:1px solid rgba(0,212,180,.2);border-radius:4px;padding:2px 6px;font-size:0.63rem;color:var(--accent);}
+  @media(max-width:900px){.charts-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spinner"></div>Loading Dashboard...</div>
+
+<header>
+  <div class="logo-mark"></div>
+  <div>
+    <h1>Project <span>Health</span> Dashboard</h1>
+    <div style="font-size:.7rem;color:var(--muted);margin-top:2px;">Weighted · Normalized · Time-Proximity Adjusted</div>
+  </div>
+  <div class="header-meta" id="header-meta"></div>
+</header>
+
+<main>
+  <div class="section-title">Portfolio Overview — Latest Week</div>
+  <div class="cards-grid" id="cards-grid"></div>
+
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-header">
+      <div>
+        <div class="detail-title" id="detail-title"></div>
+        <div style="font-size:.7rem;color:var(--muted);margin-top:4px;" id="detail-id"></div>
+      </div>
+      <div class="detail-scores">
+        <div class="detail-score-block">
+          <div class="score-label">Health Score</div>
+          <div class="detail-score-num" id="d-health" style="color:var(--accent)"></div>
+        </div>
+        <div class="detail-score-block">
+          <div class="score-label">Confidence</div>
+          <div class="detail-score-num" id="d-conf" style="color:var(--accent2)"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-box">
+        <h3>Health &amp; Confidence Trend</h3>
+        <canvas id="trendChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Score Composition — Latest Week</h3>
+        <canvas id="compositionChart"></canvas>
+      </div>
+      <div class="chart-box full">
+        <h3>Health Score Composition Over Time (Stacked by Metric)</h3>
+        <canvas id="stackedChart"></canvas>
+      </div>
+    </div>
+
+    <div class="transparency-section">
+      <h3>How the Health Score is Derived</h3>
+      <table class="metrics-table" id="metrics-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Raw Value</th>
+            <th>Normalization Formula</th>
+            <th>Normalized Score</th>
+            <th>Weight (proximity-adj)</th>
+            <th>Contribution (pts)</th>
+          </tr>
+        </thead>
+        <tbody id="metrics-body"></tbody>
+      </table>
+      <div class="proximity-note" id="proximity-note"></div>
+    </div>
+
+    <div class="transparency-section" style="margin-top:20px;">
+      <h3>How the Confidence Score is Derived</h3>
+      <table class="metrics-table">
+        <thead>
+          <tr><th>Signal</th><th>Value</th><th>Penalty Formula</th><th>Penalty Applied</th></tr>
+        </thead>
+        <tbody id="conf-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+const COLORS = ['#00d4b4','#38bdf8','#818cf8','#c084fc','#f472b6','#fb923c','#facc15','#a3e635','#34d399','#67e8f9'];
+const FORMULAS = {
+  "Schedule Variance":  "clamp((actual% - planned% + 20%) / 20%, 0, 1)",
+  "Forecast Slip":      "clamp(1 - slip_days / 140, 0, 1)",
+  "Backlog Growth":     "clamp(1 - max(0, added-closed) / 50, 0, 1)",
+  "Req. Churn":         "clamp(1 - changes_4w / 15, 0, 1)",
+  "Defect Escape Rate": "clamp(1 - escape_rate / 0.15, 0, 1)",
+  "Critical Defects":   "clamp(1 - (critical/team_size) / 2, 0, 1)",
+  "Team Churn":         "clamp(1 - churn / team_size, 0, 1)",
+  "Blocked Days":       "clamp(1 - blocked_2w / 10, 0, 1)",
+  "Unplanned Work":     "clamp(1 - unplanned_ratio / 0.6, 0, 1)",
+  "Dependencies":       "clamp(1 - dep_count / 15, 0, 1)",
+};
+
+let charts = {}, allData = null;
+
+function statusBadge(s){
+  if(s>=70) return['HEALTHY','good'];
+  if(s>=45) return['AT RISK','warn'];
+  return['CRITICAL','danger'];
+}
+function scoreColor(s){
+  if(s>=70) return 'var(--green)';
+  if(s>=45) return 'var(--warn)';
+  return 'var(--danger)';
+}
+
+function buildCards(summaries){
+  const grid = document.getElementById('cards-grid');
+  grid.innerHTML = '';
+  summaries.forEach(s => {
+    const [label,cls] = statusBadge(s.health_score);
+    const hc = scoreColor(s.health_score), cc = scoreColor(s.confidence_score);
+    const d = document.createElement('div');
+    d.className='card'; d.dataset.pid=s.project_id;
+    d.innerHTML = `
+      <div class="card-header">
+        <div><div class="card-name">${s.project_name}</div><div class="card-id">${s.project_id}</div></div>
+        <span class="badge badge-${cls}">${label}</span>
+      </div>
+      <div class="scores-row">
+        <div class="score-block">
+          <div class="score-label">Health Score</div>
+          <div class="score-value" style="color:${hc}">${s.health_score}<span class="score-unit">/100</span></div>
+          <div class="mini-bar"><div class="mini-bar-fill" style="width:${s.health_score}%;background:${hc}"></div></div>
+        </div>
+        <div class="score-block">
+          <div class="score-label">Confidence</div>
+          <div class="score-value" style="color:${cc}">${s.confidence_score}<span class="score-unit">/100</span></div>
+          <div class="mini-bar"><div class="mini-bar-fill" style="width:${s.confidence_score}%;background:${cc}"></div></div>
+        </div>
+      </div>
+      <div class="card-meta">
+        <div class="card-meta-item">Schedule: <strong>${s.raw.sched_var_pct>0?'+':''}${s.raw.sched_var_pct}%</strong></div>
+        <div class="card-meta-item">Slip: <strong>${s.raw.slip_days}d</strong></div>
+        <div class="card-meta-item">Critical Defects: <strong>${s.raw.critical_defects}</strong></div>
+        <div class="card-meta-item">Proximity: <strong>${s.raw.proximity_pct}%</strong></div>
+      </div>`;
+    d.addEventListener('click',()=>openDetail(s.project_id));
+    grid.appendChild(d);
+  });
+}
+
+function openDetail(pid){
+  document.querySelectorAll('.card').forEach(c=>c.classList.toggle('active',c.dataset.pid===pid));
+  const series  = allData.series.find(s=>s.project_id===pid);
+  const summary = allData.summaries.find(s=>s.project_id===pid);
+  const panel   = document.getElementById('detail-panel');
+  panel.classList.add('open');
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+  document.getElementById('detail-title').textContent = series.project_name;
+  document.getElementById('detail-id').textContent    = pid;
+  document.getElementById('d-health').textContent     = summary.health_score+'/100';
+  document.getElementById('d-conf').textContent       = summary.confidence_score+'/100';
+  Object.values(charts).forEach(c=>c.destroy());
+  charts={};
+  buildTrend(series);
+  buildComposition(summary);
+  buildStacked(series);
+  buildMetrics(summary);
+  buildConf(summary);
+}
+
+function buildTrend(series){
+  const ctx=document.getElementById('trendChart').getContext('2d');
+  charts.trend=new Chart(ctx,{type:'line',data:{labels:series.weeks,datasets:[
+    {label:'Health Score',data:series.health,borderColor:'#00d4b4',backgroundColor:'rgba(0,212,180,.1)',borderWidth:2.5,tension:0.4,fill:true,pointRadius:4,pointBackgroundColor:'#00d4b4'},
+    {label:'Confidence',data:series.confidence,borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.08)',borderWidth:2.5,tension:0.4,fill:true,pointRadius:4,pointBackgroundColor:'#f97316'}
+  ]},options:{responsive:true,maintainAspectRatio:true,
+    scales:{y:{min:0,max:100,grid:{color:'#1f2d45'},ticks:{color:'#64748b',font:{family:'DM Mono'}}},
+            x:{grid:{color:'#1f2d45'},ticks:{color:'#64748b',font:{family:'DM Mono',size:10}}}},
+    plugins:{legend:{labels:{color:'#94a3b8',font:{family:'DM Mono'}}}}}});
+}
+
+function buildComposition(summary){
+  const keys=Object.keys(summary.contributions);
+  const vals=keys.map(k=>summary.contributions[k]);
+  const ctx=document.getElementById('compositionChart').getContext('2d');
+  charts.comp=new Chart(ctx,{type:'doughnut',data:{labels:keys,datasets:[{data:vals,backgroundColor:COLORS,borderWidth:2,borderColor:'#111827'}]},
+    options:{responsive:true,maintainAspectRatio:true,cutout:'60%',
+      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:8}},
+               tooltip:{callbacks:{label:c=>` ${c.label}: ${c.parsed.toFixed(1)} pts`}}}}});
+}
+
+function buildStacked(series){
+  const keys=Object.keys(series.contributions_by_week[0]);
+  const datasets=keys.map((key,i)=>({label:key,data:series.contributions_by_week.map(w=>w[key]),backgroundColor:COLORS[i],borderWidth:0}));
+  const ctx=document.getElementById('stackedChart').getContext('2d');
+  charts.stacked=new Chart(ctx,{type:'bar',data:{labels:series.weeks,datasets},
+    options:{responsive:true,maintainAspectRatio:true,
+      scales:{x:{stacked:true,grid:{color:'#1f2d45'},ticks:{color:'#64748b',font:{family:'DM Mono',size:10}}},
+              y:{stacked:true,min:0,max:100,grid:{color:'#1f2d45'},ticks:{color:'#64748b',font:{family:'DM Mono'}}}},
+      plugins:{legend:{labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:6}},
+               tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)} pts`}}}}});
+}
+
+function buildMetrics(summary){
+  const body=document.getElementById('metrics-body');
+  body.innerHTML='';
+  const raw=summary.raw;
+  const rawMap={
+    "Schedule Variance": `Actual ${raw.pct_complete}% vs Planned ${raw.planned_pct}% (var = ${raw.sched_var_pct>0?'+':''}${raw.sched_var_pct}%)`,
+    "Forecast Slip":     `${raw.slip_days} days beyond planned end`,
+    "Backlog Growth":    `Items added vs closed (net churn)`,
+    "Req. Churn":        `${raw.req_churn} requirement changes in 4 weeks`,
+    "Defect Escape Rate":`${raw.defect_escape}% escape rate`,
+    "Critical Defects":  `${raw.critical_defects} critical open defects`,
+    "Team Churn":        `${raw.team_churn} member(s) left in 4 weeks`,
+    "Blocked Days":      `${raw.blocked_days} blocked days (past 2 weeks)`,
+    "Unplanned Work":    `${raw.unplanned_pct}% of work unplanned`,
+    "Dependencies":      `${raw.dependencies} active dependencies`,
+  };
+  const total=Object.values(summary.contributions).reduce((a,b)=>a+b,0);
+  const keys=Object.keys(summary.contributions);
+  keys.forEach((key,i)=>{
+    const contrib=summary.contributions[key];
+    const normPct=Math.round((contrib/total)*100);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:${COLORS[i]};font-weight:500">${key}</td>
+      <td style="color:var(--muted);font-size:.68rem">${rawMap[key]||'—'}</td>
+      <td><span class="formula-chip">${FORMULAS[key]||''}</span></td>
+      <td>
+        <div class="pill-bar">
+          <div class="pill-bar-track"><div class="pill-bar-fill" style="width:${normPct}%;background:${COLORS[i]}"></div></div>
+          <div class="pill-bar-pct">${normPct}%</div>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:.68rem">dynamic (proximity=${raw.proximity_pct}%)</td>
+      <td style="color:${COLORS[i]};font-weight:600">${contrib.toFixed(1)} pts</td>`;
+    body.appendChild(tr);
+  });
+
+  document.getElementById('proximity-note').innerHTML=`
+    <strong>Time-Proximity Adjustment:</strong> This project is <strong>${raw.proximity_pct}%</strong> through
+    its lifecycle (proximity factor = ${(raw.proximity_pct/100).toFixed(2)}). As a project nears completion,
+    <em>Schedule Variance</em>, <em>Forecast Slip</em>, and <em>Quality</em> metrics receive elevated weights
+    because late-stage slippage is harder to recover and defects cost progressively more to fix. Conversely,
+    <em>Unplanned Work</em> and <em>Dependencies</em> weights taper — the impact of new scope is diminishing.
+    All weights are renormalized to sum to 1.0 after adjustment, ensuring the health score always reflects
+    a true 0–100 scale.`;
+}
+
+function buildConf(summary){
+  const body=document.getElementById('conf-body');
+  body.innerHTML='';
+  const raw=summary.raw;
+  const slipP=(Math.max(0,raw.slip_days)*0.4).toFixed(1);
+  const churnP=(raw.req_churn*1.5).toFixed(1);
+  const rows=[
+    ['Forecast Slip',`${raw.slip_days} days`,'slip_days × 0.4',`-${slipP} pts`],
+    ['Requirements Churn',`${raw.req_churn} changes/4w`,'req_changes × 1.5',`-${churnP} pts`],
+    ['Backlog Net Growth','(added − closed)','net_backlog × 0.8','varies'],
+    ['Final Confidence Score','—','100 − Σ(penalties), clamped 0–100',`${summary.confidence_score}/100`],
+  ];
+  rows.forEach(([sig,val,formula,penalty])=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="color:var(--text)">${sig}</td><td style="color:var(--accent2)">${val}</td><td><span class="formula-chip">${formula}</span></td><td style="color:var(--warn)">${penalty}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+fetch('/api/data').then(r=>r.json()).then(data=>{
+  allData=data;
+  document.getElementById('loading').style.display='none';
+  document.getElementById('header-meta').textContent=`${data.summaries.length} Projects · ${data.series[0]?.weeks.length} Weeks`;
+  buildCards(data.summaries);
+  if(data.summaries.length>0) openDetail(data.summaries[0].project_id);
+});
+</script>
+</body>
+</html>
