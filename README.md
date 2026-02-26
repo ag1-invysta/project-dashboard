@@ -154,13 +154,15 @@ If the optional EVM columns are absent or zero, CPI and SPI are excluded from sc
 
 ### Sample Data
 
-A sample file `data.csv` is included with three projects across four weeks demonstrating healthy, moderate, and critical project states:
+A sample file `data.csv` is included with five projects across nine weeks, covering a range of health states and trajectory patterns:
 
-| Project | State | Health | Confidence |
-|---|---|---|---|
-| Mobile App Reliability | Healthy | ~97 | ~59 |
-| Payments Modernization | At Risk | ~71 | ~67 |
-| Data Platform Migration | Critical | ~37 | ~51 |
+| Project | Planned End | State | Health | Confidence | Story |
+|---|---|---|---|---|---|
+| Mobile App Reliability | May 15, 2026 | Healthy | ~100 | ~97 | Consistently ahead of schedule; forecast 3 days early |
+| Cloud Infrastructure Uplift | Sep 30, 2026 | Healthy | ~94 | ~81 | Ahead of plan throughout; minor complexity uptick late |
+| Payments Modernization | Jun 30, 2026 | Healthy (recovering) | ~93 | ~95 | Struggled early, steadily recovered; now 3d slip |
+| Customer Portal Redesign | Jul 31, 2026 | At Risk | ~52 | ~81 | Scope explosion mid-flight, PM intervention stabilizing |
+| Data Platform Migration | Aug 15, 2026 | Critical | ~16 | ~43 | Continued deterioration; 89d slip, CPI critical |
 
 ---
 
@@ -296,24 +298,48 @@ Confidence = clamp(100 − CoV_penalty − churn_penalty − backlog_penalty −
 
 #### CoV Penalty — up to 40 points
 
-The primary driver is the **Coefficient of Variation (CoV)** of the forecast slip over a rolling 4-week window:
+The primary driver is a **directional, delta-based Coefficient of Variation** computed over a rolling 4-week window. Crucially, the CoV is computed on the **week-over-week changes** (deltas) in forecast slip — not the raw slip values themselves. This separates two distinct signals:
 
+- **Erraticism** — how chaotic is the forecast movement? A forecast moving consistently in one direction scores low erraticism. A forecast flip-flopping week to week scores high.
+- **Direction** — is the average change worsening or improving? A worsening trend amplifies the penalty; an improving trend reduces it.
+
+This design prevents a common failure mode of naive CoV: a project whose forecast end date is steadily improving each week would have been incorrectly penalized under a raw-value approach because the small denominator inflated the ratio. Under the delta approach it is correctly rewarded.
+
+**Step 1 — compute deltas:**
 ```
-CoV = σ(slip_days) / |μ(slip_days)|
+deltas = diff(slip_history)   # e.g. [10,15,20,18] → [+5, +5, −2]
 ```
 
-Where σ is the sample standard deviation and μ is the mean of forecast slip days over the window (up to the last 4 weeks of data). Dividing by the mean normalizes volatility relative to the magnitude of slip — a 5-day variation on a project slipping 8 days is far more concerning than the same 5-day variation on one slipping 80 days.
-
+**Step 2 — delta CoV (erraticism):**
 ```
-CoV_penalty = clamp(CoV / 0.5, 0, 1) × 40
+reference  = max(|mean(deltas)|, 10)   # 10-day floor prevents inflation near zero
+delta_cov  = clamp(std(deltas) / reference, 0, 2.0)
+base_penalty = clamp(delta_cov / 0.5) × 30   # up to 30 pts
 ```
 
-| CoV Range | Interpretation | Penalty |
-|---|---|---|
-| 0.0 – 0.1 | Forecast is stable and trustworthy | 0 – 8 pts |
-| 0.1 – 0.3 | Moderate volatility; forecast may shift | 8 – 24 pts |
-| 0.3 – 0.5 | High volatility; treat forecast with skepticism | 24 – 40 pts |
-| > 0.5 | Very high volatility; forecast has limited predictive value | 40 pts (max) |
+**Step 3 — directional multiplier:**
+```
+dir_factor     = tanh(mean(deltas) / 7)        # smoothly bounded −1 to +1
+dir_multiplier = 1.0 + 0.4 × dir_factor        # range: ~0.6 (improving) to ~1.4 (worsening)
+```
+
+**Step 4 — directional floor** (worsening forecasts earn a minimum penalty even when movement is orderly):
+```
+directional_floor = clamp(dir_factor, 0, 1) × 8   # up to 8 pts; 0 for improving forecasts
+```
+
+**Step 5 — final penalty:**
+```
+CoV_penalty = clamp(max(base_penalty × dir_multiplier, directional_floor), 0, 40)
+```
+
+| delta_cov Range | Interpretation |
+|---|---|
+| 0.0 – 0.1 | Forecast movement is consistent and predictable |
+| 0.1 – 0.5 | Moderate erraticism; some week-to-week variation |
+| > 0.5 | High erraticism; forecast is unreliable |
+
+The full derivation chain — slip history, deltas, mean delta, delta CoV, directional multiplier, floor, and final penalty — is visible in the Forecast CoV KPI tooltip and the Confidence Score derivation table in the detail panel.
 
 #### Additional Penalties
 
@@ -321,9 +347,7 @@ CoV_penalty = clamp(CoV / 0.5, 0, 1) × 40
 |---|---|---|
 | Requirements Churn | `req_changes_4w × 1.0` | High churn predicts future forecast instability |
 | Backlog Net Growth | `max(0, added−closed) × 0.5` | Expanding scope threatens the forecast |
-| Forecast Slip | `max(0, slip_days) × 0.25` | Current slip is a direct confidence deduction |
-
-**Known limitation:** The CoV formula treats all forecast movement as instability, including consistent improvement. A project whose forecast end date is steadily improving week-over-week will still receive a CoV penalty. A future improvement would compute CoV on week-over-week *deltas* and apply a directional adjustment — rewarding consistent improvement and penalizing erratic movement more heavily than steady drift.
+| Forecast Slip | `max(0, slip_days) × 0.25` | Current slip magnitude is a direct confidence deduction |
 
 ---
 
@@ -424,21 +448,33 @@ Returns all project scores, contributions, raw values, series data, and narrativ
       },
       "narrative": "Payments Modernization is at moderate risk (71.0/100)...",
       "raw": {
-        "pct_complete": 44.0,
-        "planned_pct": 50.0,
-        "sched_var_pct": -6.0,
-        "slip_days": 18,
-        "cpi": 0.822,
-        "spi": 0.88,
-        "ev": 352000,
-        "pv": 400000,
-        "ac": 428000,
-        "slip_history": [10, 15, 20, 18],
-        "cov": 0.276,
-        "cov_penalty": 22.1,
-        "risks_high": 2,
-        "milestones_hit": 6,
-        "milestones_planned": 7
+        "planned_end_date": "2026-06-30",
+        "forecast_end_date": "2026-07-03",
+        "pct_complete": 74.0,
+        "planned_pct": 75.0,
+        "sched_var_pct": -1.0,
+        "slip_days": 3,
+        "cpi": 0.993,
+        "spi": 0.987,
+        "ev": 596400,
+        "pv": 600000,
+        "ac": 604000,
+        "slip_history": [18, 14, 10, 7, 5, 3],
+        "cov_deltas": [-4.0, -4.0, -3.0, -2.0, -2.0],
+        "cov_mean_delta": -3.0,
+        "cov_std_delta": 0.89,
+        "cov_delta_cov": 0.089,
+        "cov_dir_factor": -0.394,
+        "cov_dir_mult": 0.842,
+        "cov_base_penalty": 5.4,
+        "cov_dir_floor": 0.0,
+        "cov_penalty": 4.5,
+        "churn_penalty": 1.0,
+        "backlog_penalty": 0.0,
+        "slip_penalty": 0.75,
+        "risks_high": 1,
+        "milestones_hit": 11,
+        "milestones_planned": 12
       }
     }
   ],
@@ -489,13 +525,13 @@ All frontend logic is self-contained in `templates/index.html`. There are no com
 
 ## Known Limitations and Future Improvements
 
-**CoV directional blindness** — The Forecast CoV penalizes all forecast movement equally, including consistent improvement. A project whose end date is steadily moving earlier will accumulate CoV just like one whose end date is drifting later. The fix is to compute CoV on week-over-week deltas and apply a sign-aware directional adjustment. This is the highest-priority scoring improvement.
-
 **CSV-only input, no persistence** — Data must be provided as a flat CSV file updated manually each week. A natural next step is a lightweight SQLite backend that supports week-by-week data entry through the UI, annotations per project per week, and full history without file management.
 
 **No authentication** — The application has no login or access control. It is intended for local or trusted-network use only. For broader deployment, add authentication before exposing it externally.
 
 **SPI convergence near project end** — SPI naturally converges toward 1.0 as a project nears completion because PV stops accumulating while the team works to finish. This is a known limitation of the traditional SPI formula and can make late-project schedule performance look better than it is. The time-proximity weight adjustments partially compensate, but a more rigorous fix would switch to SPI(t) — a time-based variant — in later project phases.
+
+**Confidence score with fewer than 3 data points** — The directional CoV requires at least 2 weeks of data to compute deltas, and the erraticism component (standard deviation of deltas) requires at least 3 weeks. For a project's first two weeks, the CoV penalty is zero regardless of trend, meaning confidence is driven solely by the churn, backlog, and slip penalties. This resolves naturally once sufficient history accumulates.
 
 **Single portfolio, single file** — All projects must reside in one CSV file. For multi-portfolio environments, consider adding a `portfolio` column and a filter control in the UI, or a file-picker to load different portfolio files.
 

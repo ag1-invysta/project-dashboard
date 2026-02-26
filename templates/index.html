@@ -81,6 +81,16 @@ main{padding:28px 36px;max-width:1700px;margin:0 auto;}
 .detail-title{font-family:var(--fh);font-size:1.3rem;font-weight:800;color:#fff;}
 .detail-scores{margin-left:auto;display:flex;gap:20px;align-items:center;}
 .detail-actions{display:flex;gap:8px;}
+.date-row{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:6px;}
+.date-item{display:flex;flex-direction:column;gap:2px;}
+.date-item .date-label{font-size:.58rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+.date-item .date-val{font-family:var(--fm);font-size:.82rem;font-weight:500;color:var(--text);}
+.date-item .date-val.slipped{color:var(--warn);}
+.date-item .date-val.on-track{color:var(--green);}
+.date-slip-badge{font-size:.65rem;padding:2px 8px;border-radius:5px;font-weight:600;margin-left:6px;}
+.slip-pos{background:rgba(250,204,21,.12);color:var(--warn);border:1px solid rgba(250,204,21,.25);}
+.slip-none{background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.25);}
+.slip-neg{background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.25);}
 .detail-score-num{font-family:var(--fh);font-size:1.8rem;font-weight:800;}
 
 /* CHARTS */
@@ -171,6 +181,7 @@ main{padding:28px 36px;max-width:1700px;margin:0 auto;}
       <div>
         <div class="detail-title" id="d-title"></div>
         <div style="font-size:.65rem;color:var(--muted);margin-top:3px" id="d-id"></div>
+        <div class="date-row" id="d-dates"></div>
       </div>
       <div class="detail-scores">
         <div>
@@ -224,7 +235,7 @@ main{padding:28px 36px;max-width:1700px;margin:0 auto;}
 
     <!-- Transparency: Confidence Score -->
     <div class="trans-sec" style="margin-top:20px">
-      <h3>🔮 Confidence Score Derivation (CoV-Based)</h3>
+      <h3>🔮 Confidence Score Derivation (Directional Delta-CoV)</h3>
       <table class="mtable">
         <thead><tr><th>Signal</th><th>Value</th><th>Method / Formula</th><th>Penalty Applied</th></tr></thead>
         <tbody id="conf-body"></tbody>
@@ -333,7 +344,6 @@ function buildCards(summaries){
         <div class="chip">Schedule <strong>${raw.sched_var_pct>0?'+':''}${raw.sched_var_pct}%</strong></div>
         <div class="chip">Slip <strong>${raw.slip_days}d</strong></div>
         ${cpiStr?`<div class="chip">${cpiStr}</div>`:''}
-        ${spiStr?`<div class="chip">${spiStr}</div>`:''}
         ${raw.risks_high>0?`<div class="chip ${riskCls}">${raw.risks_high} high risks</div>`:''}
         ${raw.milestones_planned?`<div class="chip ${msCls}">MS ${raw.milestones_hit}/${raw.milestones_planned}</div>`:''}
       </div>`;
@@ -357,6 +367,7 @@ function openDetail(pid){
   document.getElementById('d-conf').textContent=summ.confidence_score+'/100';
   document.getElementById('d-narrative').innerHTML=renderMarkdown(summ.narrative);
 
+  buildDates(summ.raw);
   buildKPIs(summ.raw);
   Object.values(charts).forEach(c=>c.destroy()); charts={};
   buildTrend(series);
@@ -370,6 +381,31 @@ function renderMarkdown(text){
   return text
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
     .replace(/\*(.+?)\*/g,'<em>$1</em>');
+}
+
+function fmtDate(d){
+  if(!d) return '—';
+  const parts = d.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(parts[1])-1]} ${parseInt(parts[2])}, ${parts[0]}`;
+}
+
+function buildDates(raw){
+  const slip = raw.slip_days;
+  const slipBadge = slip > 0
+    ? `<span class="date-slip-badge slip-pos">+${slip}d slip</span>`
+    : `<span class="date-slip-badge slip-none">on schedule</span>`;
+  const fcColor = slip > 30 ? 'slipped' : slip > 0 ? 'slipped' : 'on-track';
+  document.getElementById('d-dates').innerHTML = `
+    <div class="date-item">
+      <span class="date-label">Planned End</span>
+      <span class="date-val">${fmtDate(raw.planned_end_date)}</span>
+    </div>
+    <div style="color:var(--border);font-size:1.2rem;margin-top:10px">→</div>
+    <div class="date-item">
+      <span class="date-label">Forecast End</span>
+      <span class="date-val ${fcColor}">${fmtDate(raw.forecast_end_date)}${slipBadge}</span>
+    </div>`;
 }
 
 function kpiTooltip(label, raw){
@@ -401,13 +437,25 @@ function kpiTooltip(label, raw){
   if(label==='Forecast CoV'){
     const hist=raw.slip_history||[];
     const histStr=hist.map(d=>d+'d').join(' → ');
+    const deltas=raw.cov_deltas||[];
+    const deltaStr=deltas.map(d=>(d>0?'+':'')+d+'d').join(', ');
+    const dirWord=raw.cov_mean_delta>1?'worsening':raw.cov_mean_delta<-1?'improving':'stable';
+    const dirColor=raw.cov_mean_delta>1?'var(--danger)':raw.cov_mean_delta<-1?'var(--green)':'var(--warn)';
     return `<div class="tooltip">
-      <strong style="color:#00d4b4">Forecast Coefficient of Variation</strong>
+      <strong style="color:#00d4b4">Forecast Volatility (Directional CoV)</strong>
       <hr class="tooltip-divider"/>
       <div class="tooltip-row"><span>Slip history (4w)</span><span>${histStr}</span></div>
-      <div class="tooltip-row"><span>CoV = σ ÷ |μ|</span><span>${raw.cov.toFixed(3)}</span></div>
+      <div class="tooltip-row"><span>Week-over-week deltas</span><span>${deltaStr||'—'}</span></div>
+      <div class="tooltip-row"><span>Mean delta</span><span style="color:${dirColor}">${raw.cov_mean_delta>0?'+':''}${raw.cov_mean_delta} d/wk (${dirWord})</span></div>
+      <div class="tooltip-row"><span>Delta std dev</span><span>${raw.cov_std_delta} d</span></div>
       <hr class="tooltip-divider"/>
-      <div class="tooltip-formula">Measures how stable your forecast end date is.<br/>High CoV = forecast is moving a lot week-to-week.<br/>0.0–0.1 = stable · 0.1–0.3 = moderate · &gt;0.3 = volatile</div>
+      <div class="tooltip-row"><span>Delta CoV (erraticism)</span><span>${raw.cov_delta_cov}</span></div>
+      <div class="tooltip-row"><span>Directional multiplier</span><span>${raw.cov_dir_mult}×</span></div>
+      <div class="tooltip-row"><span>Base penalty</span><span>${raw.cov_base_penalty} pts</span></div>
+      <div class="tooltip-row"><span>Directional floor</span><span>${raw.cov_dir_floor} pts</span></div>
+      <div class="tooltip-row"><span>Final CoV penalty</span><span style="color:var(--warn)">${raw.cov_penalty} pts</span></div>
+      <hr class="tooltip-divider"/>
+      <div class="tooltip-formula">Computed on forecast slip <em>changes</em>, not raw values.<br/>Consistently improving → reduced penalty · Worsening → amplified.<br/>δCoV 0–0.1 = stable · 0.1–0.5 = moderate · &gt;0.5 = erratic</div>
     </div>`;
   }
   return '';
@@ -538,16 +586,39 @@ function buildConf(summ){
   const body=document.getElementById('conf-body');
   body.innerHTML='';
   const raw=summ.raw;
-  const rows=[
-    ['Forecast Volatility (CoV)',`CoV = ${raw.cov.toFixed(3)} over rolling 4-week window`,'CoV/0.5 × 40 pts penalty',`−${raw.cov_penalty.toFixed(1)} pts`],
-    ['Requirements Churn',`${raw.req_churn} changes/4w`,'changes × 1.0',`−${raw.churn_penalty.toFixed(1)} pts`],
-    ['Backlog Net Growth','added − closed/4w','net_backlog × 0.5',`−${raw.backlog_penalty.toFixed(1)} pts`],
-    ['Forecast Slip',`${raw.slip_days} days`,'slip_days × 0.25',`−${raw.slip_penalty.toFixed(1)} pts`],
-    ['Final Confidence','—','100 − Σ penalties, clamped [0,100]',`<strong style="color:var(--accent2)">${summ.confidence_score}/100</strong>`],
+  const deltas=(raw.cov_deltas||[]).map(d=>(d>0?'+':'')+d+'d').join(', ')||'—';
+  const dirWord=raw.cov_mean_delta>1?'worsening (amplified)':raw.cov_mean_delta<-1?'improving (reduced)':'stable (neutral)';
+  const dirColor=raw.cov_mean_delta>1?'var(--danger)':raw.cov_mean_delta<-1?'var(--green)':'var(--warn)';
+
+  // Section 1: CoV breakdown sub-rows
+  const covRows=[
+    ['↳ Slip history (4w)',       (raw.slip_history||[]).map(d=>d+'d').join(' → '),  'raw forecast slip values',                      ''],
+    ['↳ Week-over-week deltas',   deltas,                                             'diff(slip_history)',                             ''],
+    ['↳ Mean delta',              `<span style="color:${dirColor}">${raw.cov_mean_delta>0?'+':''}${raw.cov_mean_delta} d/wk (${dirWord})</span>`, 'mean(deltas)', ''],
+    ['↳ Delta CoV (erraticism)',  `${raw.cov_delta_cov}`,                             'σ(deltas) / max(|μ(deltas)|, 10)',               ''],
+    ['↳ Base erraticism penalty', `${raw.cov_base_penalty} pts`,                      'clamp(δCoV / 0.5) × 30',                        ''],
+    ['↳ Directional multiplier',  `${raw.cov_dir_mult}×`,                             '1 + 0.4 × tanh(mean_delta / 7)',                ''],
+    ['↳ Directional floor',       `${raw.cov_dir_floor} pts`,                         'clamp(dir_factor, 0,1) × 8',                    ''],
+    ['Forecast Volatility (total)','—',                                               'max(base×mult, dir_floor), clamped [0,40]',      `−${raw.cov_penalty} pts`],
   ];
-  rows.forEach(([s,v,f,p])=>{
+  const otherRows=[
+    ['Requirements Churn',        `${raw.req_churn} changes/4w`,                      'changes × 1.0',                                 `−${raw.churn_penalty} pts`],
+    ['Backlog Net Growth',        'added − closed / 4w',                              'net_backlog × 0.5',                             `−${raw.backlog_penalty} pts`],
+    ['Forecast Slip',             `${raw.slip_days} days`,                            'slip_days × 0.25',                              `−${raw.slip_penalty} pts`],
+    ['Final Confidence',          '—',                                                '100 − Σ penalties, clamped [0,100]',             `<strong style="color:var(--accent2)">${summ.confidence_score}/100</strong>`],
+  ];
+
+  [...covRows, ...otherRows].forEach(([s,v,f,p],i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text)">${s}</td><td style="color:var(--accent2)">${v}</td><td><span class="fchip">${f}</span></td><td style="color:var(--warn)">${p}</td>`;
+    const isSubRow = s.startsWith('↳');
+    const isTotal  = s==='Final Confidence' || s==='Forecast Volatility (total)';
+    const rowStyle = isSubRow ? 'opacity:.75' : isTotal ? 'font-weight:600' : '';
+    tr.style.cssText = rowStyle;
+    tr.innerHTML=`
+      <td style="color:${isSubRow?'var(--muted)':'var(--text)'};padding-left:${isSubRow?'20px':'10px'}">${s}</td>
+      <td style="color:var(--accent2);font-size:.67rem">${v}</td>
+      <td><span class="fchip" style="font-size:.6rem">${f}</span></td>
+      <td style="color:var(--warn)">${p}</td>`;
     body.appendChild(tr);
   });
 }

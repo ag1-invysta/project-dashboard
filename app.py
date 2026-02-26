@@ -23,12 +23,78 @@ DEFAULT_THRESHOLDS = {
 def clamp(v, lo=0.0, hi=1.0):
     return max(lo, min(hi, v))
 
-def coeff_of_variation(values):
-    """Rolling CoV: std/mean. Returns 0 if stable, higher if volatile."""
-    arr = np.array([float(v) for v in values])
-    if len(arr) < 2 or np.mean(arr) == 0:
-        return 0.0
-    return float(np.std(arr, ddof=1) / abs(np.mean(arr)))
+def directional_cov_penalty(slip_history):
+    """
+    Directional-aware forecast volatility penalty for the Confidence Score.
+
+    Operates on week-over-week DELTAS of forecast slip, not raw slip values.
+    This separates two distinct signals:
+
+      1. Erraticism  — how chaotic is the forecast movement? (delta CoV)
+         A forecast moving consistently in one direction = low erraticism.
+         A forecast flip-flopping week to week = high erraticism.
+
+      2. Direction   — is the forecast getting better or worse on average?
+         Worsening (mean_delta > 0) amplifies the erraticism penalty.
+         Improving (mean_delta < 0) reduces it.
+
+    This correctly rewards a project whose forecast is steadily improving
+    and penalizes one that is erratic or consistently worsening, solving
+    the directional blindness of the original CoV-on-raw-values approach.
+
+    Returns: (penalty_pts: float, breakdown: dict)
+    """
+    arr = np.array([float(v) for v in slip_history])
+
+    if len(arr) < 2:
+        return 0.0, {
+            "deltas": [], "mean_delta": 0.0, "std_delta": 0.0,
+            "delta_cov": 0.0, "dir_factor": 0.0, "dir_multiplier": 1.0,
+            "base_penalty": 0.0, "directional_floor": 0.0, "final_penalty": 0.0,
+            "note": "< 2 weeks of data — no penalty applied"
+        }
+
+    deltas     = np.diff(arr)
+    mean_delta = float(np.mean(deltas))
+    std_delta  = float(np.std(deltas, ddof=1)) if len(deltas) >= 2 else 0.0
+
+    # Use max(|mean|, 10) as reference to prevent tiny mean from inflating CoV
+    # when the forecast barely moves (10-day floor = ~2-week sprint reference)
+    reference = max(abs(mean_delta), 10.0)
+    delta_cov = clamp(std_delta / reference, 0, 2.0)
+
+    # Base erraticism penalty: delta_cov 0→0 pts, ≥0.5→30 pts
+    base_penalty = clamp(delta_cov / 0.5) * 30
+
+    # Directional multiplier via tanh(mean_delta / 7):
+    #   mean +14 d/wk => tanh(+2) ≈ +0.96 => multiplier ≈ 1.38  (amplify)
+    #   mean  +7 d/wk => tanh(+1) ≈ +0.76 => multiplier ≈ 1.30
+    #   mean   0 d/wk => tanh(0)  =  0    => multiplier = 1.00  (neutral)
+    #   mean  -7 d/wk => tanh(-1) ≈ -0.76 => multiplier ≈ 0.70
+    #   mean -14 d/wk => tanh(-2) ≈ -0.96 => multiplier ≈ 0.62  (reduce)
+    dir_factor     = float(np.tanh(mean_delta / 7.0))
+    dir_multiplier = 1.0 + 0.4 * dir_factor   # range: ~0.6 to ~1.4
+
+    # Directional floor: a consistently worsening forecast earns a minimum
+    # penalty even with zero erraticism. Max floor = 8 pts at ≥+14 d/wk avg.
+    # Improving forecasts get no floor (improving is always rewarded).
+    directional_floor = clamp(dir_factor, 0.0, 1.0) * 8.0
+
+    raw_penalty   = base_penalty * dir_multiplier
+    final_penalty = clamp(max(raw_penalty, directional_floor), 0, 40)
+
+    return final_penalty, {
+        "deltas":            [round(float(d), 1) for d in deltas],
+        "mean_delta":        round(mean_delta, 2),
+        "std_delta":         round(std_delta, 2),
+        "reference":         round(reference, 1),
+        "delta_cov":         round(delta_cov, 3),
+        "dir_factor":        round(dir_factor, 3),
+        "dir_multiplier":    round(dir_multiplier, 3),
+        "base_penalty":      round(base_penalty, 1),
+        "directional_floor": round(directional_floor, 1),
+        "final_penalty":     round(final_penalty, 1),
+    }
 
 def generate_narrative(summary, trend_delta, conf_drivers):
     """Plain-language health narrative for the latest week."""
@@ -257,21 +323,21 @@ def compute_scores(df_raw, thresholds=None):
 
             health_score = sum(contributions.values())
 
-            # ── CONFIDENCE SCORE (CoV-based) ───────────────────────────
-            # Uses rolling coefficient of variation of forecast_end slip
-            # over all available weeks up to now. More volatile = lower confidence.
-            window = forecast_days_history[-4:]  # up to 4-week rolling window
-            cov    = coeff_of_variation(window)
-            # CoV of 0 = perfectly stable = 100 confidence
-            # CoV of 0.5+ = highly volatile = low confidence
-            cov_penalty = clamp(cov / 0.5) * 40   # up to 40pt penalty from volatility
+            # ── CONFIDENCE SCORE (directional CoV-based) ──────────────
+            # Uses delta-based, direction-aware CoV on a rolling 4-week window.
+            # See directional_cov_penalty() for full methodology.
+            window = forecast_days_history[-4:]
+            cov_penalty, cov_breakdown = directional_cov_penalty(window)
 
-            # Additional penalties for current state
+            # Additional penalties for current state signals
             churn_penalty   = r["requirements_changed_last_4w"] * 1.0
             backlog_penalty = max(0, net_backlog) * 0.5
             slip_penalty    = max(0, slip_days) * 0.25
 
-            confidence_score = clamp(100 - cov_penalty - churn_penalty - backlog_penalty - slip_penalty, 0, 100)
+            confidence_score = clamp(
+                100 - cov_penalty - churn_penalty - backlog_penalty - slip_penalty,
+                0, 100
+            )
 
             # ── TREND (week-over-week delta) ───────────────────────────
             prev_health = rows[-1]["health_score"] if rows else health_score
@@ -287,6 +353,8 @@ def compute_scores(df_raw, thresholds=None):
                 "contributions":     contributions,
                 "max_contributions": max_contributions,
                 "raw": {
+                    "planned_end_date":  plan_end.strftime("%Y-%m-%d"),
+                    "forecast_end_date": r["forecast_end_date"].strftime("%Y-%m-%d"),
                     "pct_complete":      round(pct_comp * 100, 1),
                     "planned_pct":       round(r["planned_percent_complete"] * 100, 1),
                     "sched_var_pct":     round(sched_var * 100, 1),
@@ -312,11 +380,21 @@ def compute_scores(df_raw, thresholds=None):
                     "milestones_hit":    int(r["milestones_hit"]) if has_ms else None,
                     "risks_open":        int(r["risks_open"]) if "risks_open" in r else 0,
                     "risks_high":        int(r["risks_high"]) if "risks_high" in r else 0,
-                    "cov":               round(cov, 3),
+                    # Confidence score breakdown (new directional CoV)
+                    "cov_deltas":        cov_breakdown["deltas"],
+                    "cov_mean_delta":    cov_breakdown["mean_delta"],
+                    "cov_std_delta":     cov_breakdown["std_delta"],
+                    "cov_delta_cov":     cov_breakdown["delta_cov"],
+                    "cov_dir_factor":    cov_breakdown["dir_factor"],
+                    "cov_dir_mult":      cov_breakdown["dir_multiplier"],
+                    "cov_base_penalty":  cov_breakdown["base_penalty"],
+                    "cov_dir_floor":     cov_breakdown["directional_floor"],
                     "cov_penalty":       round(cov_penalty, 1),
                     "churn_penalty":     round(churn_penalty, 1),
                     "backlog_penalty":   round(backlog_penalty, 1),
                     "slip_penalty":      round(slip_penalty, 1),
+                    # Legacy field kept for tooltip compatibility
+                    "cov":               cov_breakdown["delta_cov"],
                 }
             })
 
