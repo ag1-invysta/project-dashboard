@@ -194,6 +194,7 @@ main{padding:28px 36px;max-width:1700px;margin:0 auto;}
         </div>
       </div>
       <div class="detail-actions">
+        <button class="btn" id="family-toggle-btn" onclick="toggleFamilyGroup()">⊞ Group by Family</button>
         <button class="btn btn-accent" onclick="exportDetailPNG()">↓ PNG</button>
       </div>
     </div>
@@ -294,7 +295,17 @@ const THRESHOLD_META={
   milestone_floor:  {label:"Milestone Hit Rate Floor", desc:"Hit rate below this = score 0.0",       unit:"ratio 0–1"},
 };
 
-let charts={}, allData=null, currentThresholds={}, currentPid=null;
+const FAMILY_DEFS=[
+  {name:"Schedule Performance", metrics:["Schedule Variance","Forecast Slip"],      color:"#00d4b4",colorAlt:"#009b84"},
+  {name:"Scope Stability",      metrics:["Backlog Growth","Req. Churn"],             color:"#38bdf8",colorAlt:"#1a8fb5"},
+  {name:"Quality",              metrics:["Defect Escape Rate","Critical Defects"],   color:"#c084fc",colorAlt:"#8b5cf6"},
+  {name:"Resource Stability",   metrics:["Team Churn","Blocked Days"],              color:"#fb923c",colorAlt:"#c2622a"},
+  {name:"Execution",            metrics:["Unplanned Work","Dependencies"],          color:"#facc15",colorAlt:"#c9a811"},
+  {name:"EVM / Cost Performance",metrics:["CPI (Cost)","SPI (Schedule)"],          color:"#f472b6",colorAlt:"#d1548e"},
+  {name:"Milestone Performance",metrics:["Milestone Rate"],                         color:"#a3e635",colorAlt:"#7db529"},
+];
+
+let charts={}, allData=null, currentThresholds={}, currentPid=null, groupByFamily=false;
 
 function scoreColor(s){
   if(s>=75) return'var(--green)';
@@ -506,13 +517,60 @@ function buildTrend(series){
 }
 
 function buildComp(summ){
-  const keys=Object.keys(summ.contributions);
-  const vals=keys.map(k=>summ.contributions[k]);
   const ctx=document.getElementById('compChart').getContext('2d');
-  charts.comp=new Chart(ctx,{type:'doughnut',data:{labels:keys,datasets:[{data:vals,backgroundColor:COLORS,borderWidth:2,borderColor:'#111827'}]},
-    options:{responsive:true,maintainAspectRatio:true,cutout:'58%',
-      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:7}},
-               tooltip:{callbacks:{label:c=>` ${c.label}: ${c.parsed.toFixed(1)} pts`}}}}});
+  const keys=Object.keys(summ.contributions);
+
+  if(!groupByFamily){
+    const vals=keys.map(k=>summ.contributions[k]);
+    charts.comp=new Chart(ctx,{type:'doughnut',data:{labels:keys,datasets:[{data:vals,backgroundColor:COLORS,borderWidth:2,borderColor:'#111827'}]},
+      options:{responsive:true,maintainAspectRatio:true,cutout:'58%',
+        plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:7}},
+                 tooltip:{callbacks:{label:c=>` ${c.label}: ${c.parsed.toFixed(1)} pts`}}}}});
+    return;
+  }
+
+  // Grouped: 2-ring doughnut — inner ring = families, outer ring = metrics ordered by family
+  const activeFams=FAMILY_DEFS.filter(f=>f.metrics.some(m=>keys.includes(m)));
+  const outerLabels=[],outerVals=[],outerColors=[];
+  activeFams.forEach(fam=>{
+    fam.metrics.filter(m=>keys.includes(m)).forEach((m,mi)=>{
+      outerLabels.push(m);
+      outerVals.push(summ.contributions[m]);
+      outerColors.push(mi===0?fam.color:fam.colorAlt);
+    });
+  });
+  const innerLabels=activeFams.map(f=>f.name);
+  const innerVals=activeFams.map(f=>f.metrics.filter(m=>keys.includes(m)).reduce((s,m)=>s+summ.contributions[m],0));
+  const innerColors=activeFams.map(f=>f.color);
+
+  charts.comp=new Chart(ctx,{
+    type:'doughnut',
+    data:{labels:outerLabels,datasets:[
+      {label:'Family',data:innerVals,backgroundColor:innerColors,borderWidth:2,borderColor:'#111827'},
+      {label:'Metric',data:outerVals,backgroundColor:outerColors,borderWidth:1,borderColor:'#111827'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:true,cutout:'40%',
+      plugins:{
+        legend:{position:'right',labels:{color:'#94a3b8',font:{family:'DM Mono',size:10},boxWidth:10,padding:6,
+          generateLabels:function(){
+            return activeFams.map((f,i)=>({
+              text:f.name+' — '+innerVals[i].toFixed(1)+'pts',
+              fillStyle:f.color,strokeStyle:'#111827',lineWidth:1,hidden:false,
+              fontColor:'#94a3b8',datasetIndex:0,index:i
+            }));
+          }
+        }},
+        tooltip:{callbacks:{
+          title:function(items){
+            const item=items[0];
+            if(item.datasetIndex===0) return innerLabels[item.dataIndex]||'';
+            return outerLabels[item.dataIndex]||'';
+          },
+          label:function(c){return' '+c.parsed.toFixed(1)+' pts';}
+        }}
+      }
+    }
+  });
 }
 
 function buildStacked(series){
@@ -548,38 +606,63 @@ function buildMetrics(summ){
     "Milestone Rate":    raw.milestones_planned?`${raw.milestones_hit}/${raw.milestones_planned} milestones hit`:'N/A',
   };
 
-  // Gap = points lost vs potential (max - actual). Sort by gap descending = biggest drags first.
-  const gaps = {};
-  Object.keys(summ.contributions).forEach(k => {
-    gaps[k] = (maxC[k]||0) - summ.contributions[k];
-  });
-  const sortedKeys = Object.keys(summ.contributions).sort((a,b)=>gaps[b]-gaps[a]);
+  const gaps={};
+  Object.keys(summ.contributions).forEach(k=>{gaps[k]=(maxC[k]||0)-summ.contributions[k];});
 
-  sortedKeys.forEach((key,i)=>{
-    const origIdx = Object.keys(summ.contributions).indexOf(key);
-    const c   = summ.contributions[key];
-    const mx  = maxC[key]||0;
-    const gap = gaps[key];
-    const normPct = mx>0 ? Math.round((c/mx)*100) : 100;
-    const gapPct  = mx>0 ? Math.round((gap/mx)*100) : 0;
-    const gapColor = gapPct>40?'var(--danger)':gapPct>15?'var(--warn)':'var(--green)';
+  function metricRow(key,color){
+    const origIdx=Object.keys(summ.contributions).indexOf(key);
+    const col=color||COLORS[origIdx];
+    const c=summ.contributions[key], mx=maxC[key]||0, gap=gaps[key];
+    const normPct=mx>0?Math.round((c/mx)*100):100;
+    const gapPct=mx>0?Math.round((gap/mx)*100):0;
+    const gapColor=gapPct>40?'var(--danger)':gapPct>15?'var(--warn)':'var(--green)';
+    const indent=color?'padding-left:22px':'';
+    const prefix=color?`<span style="color:var(--muted);margin-right:5px">└</span>`:'';
     const tr=document.createElement('tr');
     tr.innerHTML=`
-      <td style="color:${COLORS[origIdx]};font-weight:500">${key}</td>
+      <td style="color:${col};font-weight:500;${indent}">${prefix}${key}</td>
       <td style="color:var(--muted);font-size:.68rem">${rawMap[key]||'—'}</td>
       <td><span class="fchip">${FORMULAS[key]||'—'}</span></td>
-      <td><div class="pill"><div class="pill-track"><div class="pill-fill" style="width:${normPct}%;background:${COLORS[origIdx]}"></div></div><div class="pill-pct">${normPct}%</div></div></td>
+      <td><div class="pill"><div class="pill-track"><div class="pill-fill" style="width:${normPct}%;background:${col}"></div></div><div class="pill-pct">${normPct}%</div></div></td>
       <td style="color:var(--muted);font-size:.65rem">prox-adj (${raw.proximity_pct}%)</td>
-      <td style="color:${COLORS[origIdx]};font-weight:600">${c.toFixed(1)}<span style="color:var(--muted)">/${mx.toFixed(1)}</span></td>
+      <td style="color:${col};font-weight:600">${c.toFixed(1)}<span style="color:var(--muted)">/${mx.toFixed(1)}</span></td>
       <td style="color:${gapColor};font-weight:600">${gap>0.05?'−'+gap.toFixed(1)+' pts':'✓ full'}</td>`;
-    body.appendChild(tr);
-  });
+    return tr;
+  }
+
+  if(!groupByFamily){
+    // Default: all metrics sorted by gap descending
+    Object.keys(summ.contributions).sort((a,b)=>gaps[b]-gaps[a]).forEach(key=>{
+      body.appendChild(metricRow(key,null));
+    });
+  } else {
+    // Grouped by family — families sorted by total gap desc, metrics within family by gap desc
+    const activeKeys=Object.keys(summ.contributions);
+    const activeFams=FAMILY_DEFS.filter(f=>f.metrics.some(m=>activeKeys.includes(m)));
+    const famGaps={};
+    activeFams.forEach(f=>{famGaps[f.name]=f.metrics.filter(m=>activeKeys.includes(m)).reduce((s,m)=>s+(gaps[m]||0),0);});
+    [...activeFams].sort((a,b)=>famGaps[b.name]-famGaps[a.name]).forEach(fam=>{
+      const famMetrics=fam.metrics.filter(m=>activeKeys.includes(m));
+      const famContrib=famMetrics.reduce((s,m)=>s+(summ.contributions[m]||0),0);
+      const famMax=famMetrics.reduce((s,m)=>s+(maxC[m]||0),0);
+      const famGap=famGaps[fam.name];
+      // Family header row
+      const hdr=document.createElement('tr');
+      hdr.innerHTML=`<td colspan="7" style="background:rgba(0,0,0,.25);color:${fam.color};font-family:var(--fh);font-weight:700;font-size:.72rem;letter-spacing:1px;padding:8px 10px 6px;border-top:2px solid ${fam.color}44;">${fam.name}<span style="color:var(--muted);font-weight:400;margin-left:10px;font-family:var(--fm);font-size:.65rem">${famContrib.toFixed(1)} / ${famMax.toFixed(1)} pts${famGap>0.05?' · −'+famGap.toFixed(1)+' gap':' · ✓ full'}</span></td>`;
+      body.appendChild(hdr);
+      // Metrics within family sorted by gap desc
+      famMetrics.sort((a,b)=>gaps[b]-gaps[a]).forEach(key=>{
+        body.appendChild(metricRow(key,fam.color));
+      });
+    });
+  }
+
   document.getElementById('prox-note').innerHTML=`
     <strong>Time-Proximity Adjustment:</strong> This project is <strong>${raw.proximity_pct}%</strong> through
     its lifecycle. Schedule, Quality, and EVM metrics receive increasing weight as the project nears completion —
     late-stage slippage is harder to recover and defects cost more to fix. Weights are renormalized to sum to 1.0
     after adjustment, keeping the health score on a true 0–100 scale.
-    <br/><br/><strong>Table is sorted by gap (points lost)</strong> — metrics at the top are the biggest drag on health.`;
+    <br/><br/><strong>Table is sorted by gap (points lost)</strong> — ${groupByFamily?'families':'metrics'} at the top are the biggest drag on health.`;
 }
 
 function buildConf(summ){
@@ -621,6 +704,20 @@ function buildConf(summ){
       <td style="color:var(--warn)">${p}</td>`;
     body.appendChild(tr);
   });
+}
+
+// ── FAMILY GROUPING TOGGLE ────────────────────────────
+function toggleFamilyGroup(){
+  groupByFamily=!groupByFamily;
+  const btn=document.getElementById('family-toggle-btn');
+  if(groupByFamily){btn.classList.add('btn-accent');btn.textContent='⊞ Grouped by Family';}
+  else{btn.classList.remove('btn-accent');btn.textContent='⊞ Group by Family';}
+  if(currentPid){
+    const summ=allData.summaries.find(s=>s.project_id===currentPid);
+    if(charts.comp){charts.comp.destroy();delete charts.comp;}
+    buildComp(summ);
+    buildMetrics(summ);
+  }
 }
 
 // ── SETTINGS ──────────────────────────────────────────
