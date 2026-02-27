@@ -236,7 +236,7 @@ main{padding:28px 36px;max-width:1700px;margin:0 auto;}
 
     <!-- Transparency: Confidence Score -->
     <div class="trans-sec" style="margin-top:20px">
-      <h3>🔮 Confidence Score Derivation (Directional Delta-CoV)</h3>
+      <h3 id="conf-heading">🔮 Confidence Score Derivation (Directional Delta-CoV)</h3>
       <table class="mtable">
         <thead><tr><th>Signal</th><th>Value</th><th>Method / Formula</th><th>Penalty Applied</th></tr></thead>
         <tbody id="conf-body"></tbody>
@@ -278,6 +278,11 @@ const FORMULAS={
   "CPI (Cost)":         "clamp((CPI − cpi_floor) / (1 − cpi_floor), 0,1)",
   "SPI (Schedule)":     "clamp((SPI − spi_floor) / (1 − spi_floor), 0,1)",
   "Milestone Rate":     "clamp((hit/planned − ms_floor) / (1 − ms_floor), 0,1)",
+  // Kanban metrics
+  "Throughput Rate":    "clamp((tp/tp_avg − floor) / (1 − floor), 0,1)",
+  "Cycle Time":         "clamp(1 − avg_cycle_time / cycle_time_max, 0,1)",
+  "WIP Adherence":      "clamp(1 − max(0, wip/wip_limit − 1) / wip_overage_max, 0,1)",
+  "Aging WIP":          "clamp(1 − aging_items / aging_wip_max, 0,1)",
 };
 
 const THRESHOLD_META={
@@ -293,6 +298,11 @@ const THRESHOLD_META={
   cpi_floor:        {label:"CPI Floor",                desc:"CPI below this = score 0.0",            unit:"index"},
   spi_floor:        {label:"SPI Floor",                desc:"SPI below this = score 0.0",            unit:"index"},
   milestone_floor:  {label:"Milestone Hit Rate Floor", desc:"Hit rate below this = score 0.0",       unit:"ratio 0–1"},
+  // Kanban thresholds
+  cycle_time_max:   {label:"Cycle Time Max (days)",   desc:"Avg cycle time = score 0.0 [Kanban]",   unit:"days"},
+  throughput_floor: {label:"Throughput Floor",         desc:"Below X% of rolling avg = score 0.0 [Kanban]", unit:"ratio 0–1"},
+  wip_overage_max:  {label:"WIP Overage Max",          desc:"% over WIP limit = score 0.0 [Kanban]", unit:"ratio 0–1"},
+  aging_wip_max:    {label:"Aging WIP Max",            desc:"Aging items count = score 0.0 [Kanban]",unit:"count"},
 };
 
 const FAMILY_DEFS=[
@@ -305,7 +315,22 @@ const FAMILY_DEFS=[
   {name:"Milestone Performance",metrics:["Milestone Rate"],                         color:"#a3e635",colorAlt:"#7db529"},
 ];
 
-let charts={}, allData=null, currentThresholds={}, currentPid=null, groupByFamily=false;
+const KANBAN_FAMILY_DEFS=[
+  {name:"Flow Performance",      metrics:["Throughput Rate","Cycle Time"],           color:"#00d4b4",colorAlt:"#009b84"},
+  {name:"WIP Health",            metrics:["WIP Adherence","Aging WIP"],             color:"#38bdf8",colorAlt:"#1a8fb5"},
+  {name:"Scope Stability",       metrics:["Backlog Growth","Req. Churn"],            color:"#818cf8",colorAlt:"#5a6cd4"},
+  {name:"Quality",               metrics:["Defect Escape Rate","Critical Defects"],  color:"#c084fc",colorAlt:"#8b5cf6"},
+  {name:"Resource Stability",    metrics:["Team Churn","Blocked Days"],             color:"#fb923c",colorAlt:"#c2622a"},
+  {name:"EVM / Cost Performance",metrics:["CPI (Cost)"],                            color:"#f472b6",colorAlt:"#d1548e"},
+  {name:"Milestone Performance", metrics:["Milestone Rate"],                        color:"#a3e635",colorAlt:"#7db529"},
+  {name:"Target Date",           metrics:["Forecast Slip"],                         color:"#facc15",colorAlt:"#c9a811"},
+];
+
+function getFamilyDefs(framework){
+  return (framework==='kanban') ? KANBAN_FAMILY_DEFS : FAMILY_DEFS;
+}
+
+let charts={}, allData=null, currentThresholds={}, currentPid=null, groupByFamily=false, currentFramework='planned';
 
 function scoreColor(s){
   if(s>=75) return'var(--green)';
@@ -327,15 +352,32 @@ function buildCards(summaries){
   summaries.forEach(s=>{
     const cls=statusClass(s.health_score), hc=scoreColor(s.health_score), cc=scoreColor(s.confidence_score);
     const raw=s.raw;
-    const cpiStr=raw.cpi!=null?`CPI <strong>${raw.cpi.toFixed(2)}</strong>`:'';
-    const spiStr=raw.spi!=null?`SPI <strong>${raw.spi.toFixed(2)}</strong>`:'';
+    const fw=(raw.delivery_framework||'planned').toLowerCase();
+    const isKanban=fw==='kanban';
     const riskCls=raw.risks_high>=5?'danger':raw.risks_high>=2?'warn':'';
     const msCls=raw.milestones_planned&&(raw.milestones_hit/raw.milestones_planned)<0.7?'warn':'';
+    const fwBadgeCard=isKanban?`<span style="font-size:.55rem;padding:1px 6px;border-radius:99px;font-weight:700;letter-spacing:1px;background:rgba(56,189,248,.15);color:#38bdf8;border:1px solid rgba(56,189,248,.3);margin-left:5px;">KB</span>`:''
+
+    let chips='';
+    if(isKanban){
+      if(raw.throughput_last_4w!=null) chips+=`<div class="chip">TP <strong>${raw.throughput_last_4w}/4w</strong></div>`;
+      if(raw.avg_cycle_time!=null) chips+=`<div class="chip">CT <strong>${raw.avg_cycle_time}d</strong></div>`;
+      if(raw.wip_current!=null) chips+=`<div class="chip">WIP <strong>${raw.wip_current}/${raw.wip_limit}</strong></div>`;
+      if(raw.cpi!=null) chips+=`<div class="chip">CPI <strong>${raw.cpi.toFixed(2)}</strong></div>`;
+    } else {
+      const cpiStr=raw.cpi!=null?`CPI <strong>${raw.cpi.toFixed(2)}</strong>`:'';
+      chips+=`<div class="chip">Schedule <strong>${raw.sched_var_pct>0?'+':''}${raw.sched_var_pct}%</strong></div>`;
+      chips+=`<div class="chip">Slip <strong>${raw.slip_days}d</strong></div>`;
+      if(cpiStr) chips+=`<div class="chip">${cpiStr}</div>`;
+      if(raw.risks_high>0) chips+=`<div class="chip ${riskCls}">${raw.risks_high} high risks</div>`;
+      if(raw.milestones_planned) chips+=`<div class="chip ${msCls}">MS ${raw.milestones_hit}/${raw.milestones_planned}</div>`;
+    }
+
     const d=document.createElement('div');
     d.className=`card ${cls}`; d.dataset.pid=s.project_id;
     d.innerHTML=`
       <div class="card-header">
-        <div><div class="card-name">${s.project_name}</div><div class="card-id">${s.project_id}</div></div>
+        <div><div class="card-name">${s.project_name}${fwBadgeCard}</div><div class="card-id">${s.project_id}</div></div>
         <span class="badge badge-${cls}">${statusLabel(s.health_score)}</span>
       </div>
       <div class="scores-row">
@@ -351,13 +393,7 @@ function buildCards(summaries){
           <div class="mini-bar"><div class="mini-fill" style="width:${s.confidence_score}%;background:${cc}"></div></div>
         </div>
       </div>
-      <div class="card-chips">
-        <div class="chip">Schedule <strong>${raw.sched_var_pct>0?'+':''}${raw.sched_var_pct}%</strong></div>
-        <div class="chip">Slip <strong>${raw.slip_days}d</strong></div>
-        ${cpiStr?`<div class="chip">${cpiStr}</div>`:''}
-        ${raw.risks_high>0?`<div class="chip ${riskCls}">${raw.risks_high} high risks</div>`:''}
-        ${raw.milestones_planned?`<div class="chip ${msCls}">MS ${raw.milestones_hit}/${raw.milestones_planned}</div>`:''}
-      </div>`;
+      <div class="card-chips">${chips}</div>`;
     d.addEventListener('click',()=>openDetail(s.project_id));
     grid.appendChild(d);
   });
@@ -372,7 +408,12 @@ function openDetail(pid){
   panel.classList.add('open');
   panel.scrollIntoView({behavior:'smooth',block:'start'});
 
-  document.getElementById('d-title').textContent=series.project_name;
+  currentFramework = (summ.raw.delivery_framework || 'planned').toLowerCase();
+  const fwBadge = currentFramework === 'kanban'
+    ? `<span style="margin-left:10px;font-size:.6rem;padding:2px 8px;border-radius:99px;font-weight:700;letter-spacing:1px;background:rgba(56,189,248,.15);color:#38bdf8;border:1px solid rgba(56,189,248,.3);">KANBAN</span>`
+    : `<span style="margin-left:10px;font-size:.6rem;padding:2px 8px;border-radius:99px;font-weight:700;letter-spacing:1px;background:rgba(0,212,180,.1);color:var(--accent);border:1px solid rgba(0,212,180,.25);">PLANNED</span>`;
+
+  document.getElementById('d-title').innerHTML = series.project_name + fwBadge;
   document.getElementById('d-id').textContent=pid;
   document.getElementById('d-health').textContent=summ.health_score+'/100';
   document.getElementById('d-conf').textContent=summ.confidence_score+'/100';
@@ -402,6 +443,14 @@ function fmtDate(d){
 }
 
 function buildDates(raw){
+  if(raw.delivery_framework==='kanban' && !raw.planned_end_date){
+    document.getElementById('d-dates').innerHTML=`
+      <div class="date-item">
+        <span class="date-label">Delivery Model</span>
+        <span class="date-val" style="color:#38bdf8">Continuous Flow — No Fixed End Date</span>
+      </div>`;
+    return;
+  }
   const slip = raw.slip_days;
   const slipBadge = slip > 0
     ? `<span class="date-slip-badge slip-pos">+${slip}d slip</span>`
@@ -475,26 +524,61 @@ function kpiTooltip(label, raw){
 function buildKPIs(raw){
   const row=document.getElementById('kpi-row');
   const kpis=[];
-  if(raw.cpi!=null){
-    const cc=raw.cpi>=1?'var(--green)':raw.cpi>=0.85?'var(--warn)':'var(--danger)';
-    kpis.push({label:'CPI',val:raw.cpi.toFixed(2),sub:'Cost Performance Index',color:cc,tip:true});
-    const sc=raw.spi>=1?'var(--green)':raw.spi>=0.85?'var(--warn)':'var(--danger)';
-    kpis.push({label:'SPI',val:raw.spi.toFixed(2),sub:'Schedule Performance Index',color:sc,tip:true});
-    const cost_var=raw.actual_cost-raw.planned_cost;
-    const cv_c=cost_var>0?'var(--danger)':'var(--green)';
-    kpis.push({label:'Cost Variance',val:`$${Math.abs(cost_var/1000).toFixed(0)}K`,sub:cost_var>0?'Over budget':'Under budget',color:cv_c});
+
+  if(raw.delivery_framework==='kanban'){
+    // Kanban KPIs
+    if(raw.throughput_last_4w!=null){
+      const tpRatio=raw.throughput_avg_4w>0?raw.throughput_last_4w/raw.throughput_avg_4w:1;
+      const tc=tpRatio>=1?'var(--green)':tpRatio>=0.7?'var(--warn)':'var(--danger)';
+      kpis.push({label:'Throughput',val:raw.throughput_last_4w+' items',sub:`4w avg: ${raw.throughput_avg_4w}`,color:tc});
+    }
+    if(raw.avg_cycle_time!=null){
+      const ctc=raw.avg_cycle_time<=7?'var(--green)':raw.avg_cycle_time<=14?'var(--warn)':'var(--danger)';
+      kpis.push({label:'Avg Cycle Time',val:raw.avg_cycle_time+'d',sub:'Rolling 4-week avg',color:ctc});
+    }
+    if(raw.wip_current!=null&&raw.wip_limit!=null){
+      const wipRatio=raw.wip_current/Math.max(raw.wip_limit,1);
+      const wc=wipRatio<=1?'var(--green)':wipRatio<=1.2?'var(--warn)':'var(--danger)';
+      kpis.push({label:'WIP',val:`${raw.wip_current}/${raw.wip_limit}`,sub:wipRatio>1?'Over limit':'Within limit',color:wc});
+    }
+    if(raw.aging_wip_items!=null&&raw.aging_wip_items>0){
+      const agc=raw.aging_wip_items>=5?'var(--danger)':raw.aging_wip_items>=2?'var(--warn)':'var(--green)';
+      kpis.push({label:'Aging WIP',val:raw.aging_wip_items,sub:'Items past age threshold',color:agc});
+    }
+    if(raw.cpi!=null){
+      const cc=raw.cpi>=1?'var(--green)':raw.cpi>=0.85?'var(--warn)':'var(--danger)';
+      kpis.push({label:'CPI',val:raw.cpi.toFixed(2),sub:'Cost Performance Index',color:cc,tip:true});
+    }
+    if(raw.milestones_planned){
+      const rate=Math.round(raw.milestones_hit/raw.milestones_planned*100);
+      const mc=rate>=80?'var(--green)':rate>=60?'var(--warn)':'var(--danger)';
+      kpis.push({label:'Milestone Rate',val:rate+'%',sub:`${raw.milestones_hit}/${raw.milestones_planned} achieved`,color:mc});
+    }
+    const tpCov=raw.tp_cov_delta_cov||0;
+    kpis.push({label:'Throughput CoV',val:tpCov.toFixed(3),sub:'Throughput volatility',color:tpCov>0.3?'var(--danger)':tpCov>0.1?'var(--warn)':'var(--green)'});
+  } else {
+    // Planned KPIs
+    if(raw.cpi!=null){
+      const cc=raw.cpi>=1?'var(--green)':raw.cpi>=0.85?'var(--warn)':'var(--danger)';
+      kpis.push({label:'CPI',val:raw.cpi.toFixed(2),sub:'Cost Performance Index',color:cc,tip:true});
+      const sc=raw.spi>=1?'var(--green)':raw.spi>=0.85?'var(--warn)':'var(--danger)';
+      kpis.push({label:'SPI',val:raw.spi.toFixed(2),sub:'Schedule Performance Index',color:sc,tip:true});
+      const cost_var=raw.actual_cost-raw.planned_cost;
+      const cv_c=cost_var>0?'var(--danger)':'var(--green)';
+      kpis.push({label:'Cost Variance',val:`$${Math.abs(cost_var/1000).toFixed(0)}K`,sub:cost_var>0?'Over budget':'Under budget',color:cv_c});
+    }
+    if(raw.milestones_planned){
+      const rate=Math.round(raw.milestones_hit/raw.milestones_planned*100);
+      const mc=rate>=80?'var(--green)':rate>=60?'var(--warn)':'var(--danger)';
+      kpis.push({label:'Milestone Rate',val:rate+'%',sub:`${raw.milestones_hit}/${raw.milestones_planned} achieved`,color:mc});
+    }
+    if(raw.risks_open>0){
+      const rc=raw.risks_high>=5?'var(--danger)':raw.risks_high>=2?'var(--warn)':'var(--green)';
+      kpis.push({label:'Open Risks',val:raw.risks_open,sub:`${raw.risks_high} high severity`,color:rc});
+    }
+    kpis.push({label:'Forecast Slip',val:raw.slip_days+'d',sub:'Days beyond planned end',color:raw.slip_days>30?'var(--danger)':raw.slip_days>0?'var(--warn)':'var(--green)'});
+    kpis.push({label:'Forecast CoV',val:raw.cov.toFixed(3),sub:'Forecast volatility',color:raw.cov>0.3?'var(--danger)':raw.cov>0.1?'var(--warn)':'var(--green)',tip:true});
   }
-  if(raw.milestones_planned){
-    const rate=Math.round(raw.milestones_hit/raw.milestones_planned*100);
-    const mc=rate>=80?'var(--green)':rate>=60?'var(--warn)':'var(--danger)';
-    kpis.push({label:'Milestone Rate',val:rate+'%',sub:`${raw.milestones_hit}/${raw.milestones_planned} achieved`,color:mc});
-  }
-  if(raw.risks_open>0){
-    const rc=raw.risks_high>=5?'var(--danger)':raw.risks_high>=2?'var(--warn)':'var(--green)';
-    kpis.push({label:'Open Risks',val:raw.risks_open,sub:`${raw.risks_high} high severity`,color:rc});
-  }
-  kpis.push({label:'Forecast Slip',val:raw.slip_days+'d',sub:'Days beyond planned end',color:raw.slip_days>30?'var(--danger)':raw.slip_days>0?'var(--warn)':'var(--green)'});
-  kpis.push({label:'Forecast CoV',val:raw.cov.toFixed(3),sub:'Forecast volatility',color:raw.cov>0.3?'var(--danger)':raw.cov>0.1?'var(--warn)':'var(--green)',tip:true});
 
   row.innerHTML=kpis.map(k=>`
     <div class="kpi-card ${k.tip?'has-tooltip':''}">
@@ -530,7 +614,7 @@ function buildComp(summ){
   }
 
   // Grouped: 2-ring doughnut — inner ring = families, outer ring = metrics ordered by family
-  const activeFams=FAMILY_DEFS.filter(f=>f.metrics.some(m=>keys.includes(m)));
+  const activeFams=getFamilyDefs(currentFramework).filter(f=>f.metrics.some(m=>keys.includes(m)));
   const outerLabels=[],outerVals=[],outerColors=[];
   activeFams.forEach(fam=>{
     fam.metrics.filter(m=>keys.includes(m)).forEach((m,mi)=>{
@@ -604,6 +688,11 @@ function buildMetrics(summ){
     "CPI (Cost)":        raw.cpi!=null?`EV=$${(raw.ev/1000).toFixed(1)}K, AC=$${(raw.ac/1000).toFixed(1)}K → CPI=${raw.cpi.toFixed(3)}`:'N/A',
     "SPI (Schedule)":    raw.spi!=null?`EV=$${(raw.ev/1000).toFixed(1)}K, PV=$${(raw.pv/1000).toFixed(1)}K → SPI=${raw.spi.toFixed(3)}`:'N/A',
     "Milestone Rate":    raw.milestones_planned?`${raw.milestones_hit}/${raw.milestones_planned} milestones hit`:'N/A',
+    // Kanban
+    "Throughput Rate":   raw.throughput_last_4w!=null?`${raw.throughput_last_4w} items/4w (avg ${raw.throughput_avg_4w})`:'N/A',
+    "Cycle Time":        raw.avg_cycle_time!=null?`${raw.avg_cycle_time} day avg cycle time`:'N/A',
+    "WIP Adherence":     raw.wip_current!=null?`WIP ${raw.wip_current} / limit ${raw.wip_limit}`:'N/A',
+    "Aging WIP":         raw.aging_wip_items!=null?`${raw.aging_wip_items} items past age threshold`:'N/A',
   };
 
   const gaps={};
@@ -638,7 +727,7 @@ function buildMetrics(summ){
   } else {
     // Grouped by family — families sorted by total gap desc, metrics within family by gap desc
     const activeKeys=Object.keys(summ.contributions);
-    const activeFams=FAMILY_DEFS.filter(f=>f.metrics.some(m=>activeKeys.includes(m)));
+    const activeFams=getFamilyDefs(currentFramework).filter(f=>f.metrics.some(m=>activeKeys.includes(m)));
     const famGaps={};
     activeFams.forEach(f=>{famGaps[f.name]=f.metrics.filter(m=>activeKeys.includes(m)).reduce((s,m)=>s+(gaps[m]||0),0);});
     [...activeFams].sort((a,b)=>famGaps[b.name]-famGaps[a.name]).forEach(fam=>{
@@ -657,44 +746,93 @@ function buildMetrics(summ){
     });
   }
 
-  document.getElementById('prox-note').innerHTML=`
-    <strong>Time-Proximity Adjustment:</strong> This project is <strong>${raw.proximity_pct}%</strong> through
-    its lifecycle. Schedule, Quality, and EVM metrics receive increasing weight as the project nears completion —
-    late-stage slippage is harder to recover and defects cost more to fix. Weights are renormalized to sum to 1.0
-    after adjustment, keeping the health score on a true 0–100 scale.
-    <br/><br/><strong>Table is sorted by gap (points lost)</strong> — ${groupByFamily?'families':'metrics'} at the top are the biggest drag on health.`;
+  if(currentFramework==='kanban'){
+    document.getElementById('prox-note').innerHTML=`
+      <strong>Kanban Fixed Weights:</strong> This is a Kanban flow-based project — no lifecycle proximity adjustment is applied.
+      Weights are fixed and normalised to sum to 1.0 based on which optional metric groups (EVM, Milestone, Forecast Slip) are present.
+      Flow metrics (Throughput Rate, Cycle Time, WIP Adherence, Aging WIP) drive the Flow Performance and WIP Health families.
+      <br/><br/><strong>Table is sorted by gap (points lost)</strong> — ${groupByFamily?'families':'metrics'} at the top are the biggest drag on health.`;
+  } else {
+    document.getElementById('prox-note').innerHTML=`
+      <strong>Time-Proximity Adjustment:</strong> This project is <strong>${raw.proximity_pct}%</strong> through
+      its lifecycle. Schedule, Quality, and EVM metrics receive increasing weight as the project nears completion —
+      late-stage slippage is harder to recover and defects cost more to fix. Weights are renormalized to sum to 1.0
+      after adjustment, keeping the health score on a true 0–100 scale.
+      <br/><br/><strong>Table is sorted by gap (points lost)</strong> — ${groupByFamily?'families':'metrics'} at the top are the biggest drag on health.`;
+  }
 }
 
 function buildConf(summ){
   const body=document.getElementById('conf-body');
   body.innerHTML='';
   const raw=summ.raw;
-  const deltas=(raw.cov_deltas||[]).map(d=>(d>0?'+':'')+d+'d').join(', ')||'—';
-  const dirWord=raw.cov_mean_delta>1?'worsening (amplified)':raw.cov_mean_delta<-1?'improving (reduced)':'stable (neutral)';
-  const dirColor=raw.cov_mean_delta>1?'var(--danger)':raw.cov_mean_delta<-1?'var(--green)':'var(--warn)';
+  const confHeading=document.getElementById('conf-heading');
+  if(confHeading){
+    confHeading.textContent = currentFramework==='kanban'
+      ? '🔮 Confidence Score Derivation (Throughput CoV — Kanban)'
+      : '🔮 Confidence Score Derivation (Directional Delta-CoV)';
+  }
 
-  // Section 1: CoV breakdown sub-rows
-  const covRows=[
-    ['↳ Slip history (4w)',       (raw.slip_history||[]).map(d=>d+'d').join(' → '),  'raw forecast slip values',                      ''],
-    ['↳ Week-over-week deltas',   deltas,                                             'diff(slip_history)',                             ''],
-    ['↳ Mean delta',              `<span style="color:${dirColor}">${raw.cov_mean_delta>0?'+':''}${raw.cov_mean_delta} d/wk (${dirWord})</span>`, 'mean(deltas)', ''],
-    ['↳ Delta CoV (erraticism)',  `${raw.cov_delta_cov}`,                             'σ(deltas) / max(|μ(deltas)|, 10)',               ''],
-    ['↳ Base erraticism penalty', `${raw.cov_base_penalty} pts`,                      'clamp(δCoV / 0.5) × 30',                        ''],
-    ['↳ Directional multiplier',  `${raw.cov_dir_mult}×`,                             '1 + 0.4 × tanh(mean_delta / 7)',                ''],
-    ['↳ Directional floor',       `${raw.cov_dir_floor} pts`,                         'clamp(dir_factor, 0,1) × 8',                    ''],
-    ['Forecast Volatility (total)','—',                                               'max(base×mult, dir_floor), clamped [0,40]',      `−${raw.cov_penalty} pts`],
-  ];
-  const otherRows=[
-    ['Requirements Churn',        `${raw.req_churn} changes/4w`,                      'changes × 1.0',                                 `−${raw.churn_penalty} pts`],
-    ['Backlog Net Growth',        'added − closed / 4w',                              'net_backlog × 0.5',                             `−${raw.backlog_penalty} pts`],
-    ['Forecast Slip',             `${raw.slip_days} days`,                            'slip_days × 0.25',                              `−${raw.slip_penalty} pts`],
-    ['Final Confidence',          '—',                                                '100 − Σ penalties, clamped [0,100]',             `<strong style="color:var(--accent2)">${summ.confidence_score}/100</strong>`],
-  ];
+  let allRows=[];
 
-  [...covRows, ...otherRows].forEach(([s,v,f,p],i)=>{
+  if(currentFramework==='kanban'){
+    // ── Kanban: throughput CoV breakdown ──────────────────────────
+    const tpDeltas=(raw.tp_cov_deltas||[]).map(d=>(d>0?'+':'')+d+' items').join(', ')||'—';
+    const tpMean=raw.tp_cov_mean_delta||0;
+    const tpDirWord=tpMean>1?'improving (reduced penalty)':tpMean<-1?'declining (amplified)':'stable (neutral)';
+    const tpDirColor=tpMean>1?'var(--green)':tpMean<-1?'var(--danger)':'var(--warn)';
+    const tpHistory=(raw.slip_history&&raw.slip_history.length>0)?raw.slip_history.map(d=>d+'d').join(' → '):'—';
+    const tpWindow=raw.throughput_last_4w!=null?`rolling window: ${raw.throughput_avg_4w} avg`:'—';
+
+    const covRows=[
+      ['↳ Throughput history (4w)',  tpWindow,                                                                  'throughput_history[-4:]',                         ''],
+      ['↳ Week-over-week deltas',    tpDeltas,                                                                  'diff(throughput_history)',                         ''],
+      ['↳ Mean delta',               `<span style="color:${tpDirColor}">${tpMean>0?'+':''}${tpMean} items/wk (${tpDirWord})</span>`, 'mean(deltas)',  ''],
+      ['↳ Delta CoV (erraticism)',   `${raw.tp_cov_delta_cov||0}`,                                             'σ(deltas) / max(|μ(deltas)|, 1)',                 ''],
+      ['↳ Base erraticism penalty',  `${raw.tp_cov_base_penalty||0} pts`,                                      'clamp(δCoV / 0.5) × 30',                          ''],
+      ['↳ Directional multiplier',   `${raw.tp_cov_dir_mult||1}×`,                                             '1 − 0.4 × tanh(mean_delta / 3)  [inverted]',      ''],
+      ['↳ Directional floor',        `${raw.tp_cov_dir_floor||0} pts`,                                         'clamp(−dir_factor, 0,1) × 8',                     ''],
+      ['Throughput Volatility (total)','—',                                                                     'max(base×mult, dir_floor), clamped [0,40]',       `−${raw.tp_cov_penalty||0} pts`],
+    ];
+    const otherRows=[
+      ['Requirements Churn',         `${raw.req_churn} changes/4w`,                                            'changes × 1.0',                                   `−${raw.churn_penalty} pts`],
+      ['Backlog Net Growth',          'added − closed / 4w',                                                    'net_backlog × 0.5',                               `−${raw.backlog_penalty} pts`],
+    ];
+    if(raw.slip_days>0){
+      otherRows.push(['Forecast Slip (target date)', `${raw.slip_days} days`, 'slip_days × 0.15  [lighter than planned]', `−${raw.slip_penalty} pts`]);
+    }
+    otherRows.push(['Final Confidence', '—', '100 − Σ penalties, clamped [0,100]', `<strong style="color:var(--accent2)">${summ.confidence_score}/100</strong>`]);
+    allRows=[...covRows,...otherRows];
+
+  } else {
+    // ── Planned: forecast slip CoV breakdown ──────────────────────
+    const deltas=(raw.cov_deltas||[]).map(d=>(d>0?'+':'')+d+'d').join(', ')||'—';
+    const dirWord=raw.cov_mean_delta>1?'worsening (amplified)':raw.cov_mean_delta<-1?'improving (reduced)':'stable (neutral)';
+    const dirColor=raw.cov_mean_delta>1?'var(--danger)':raw.cov_mean_delta<-1?'var(--green)':'var(--warn)';
+
+    const covRows=[
+      ['↳ Slip history (4w)',       (raw.slip_history||[]).map(d=>d+'d').join(' → '),  'raw forecast slip values',                      ''],
+      ['↳ Week-over-week deltas',   deltas,                                             'diff(slip_history)',                             ''],
+      ['↳ Mean delta',              `<span style="color:${dirColor}">${raw.cov_mean_delta>0?'+':''}${raw.cov_mean_delta} d/wk (${dirWord})</span>`, 'mean(deltas)', ''],
+      ['↳ Delta CoV (erraticism)',  `${raw.cov_delta_cov}`,                             'σ(deltas) / max(|μ(deltas)|, 10)',               ''],
+      ['↳ Base erraticism penalty', `${raw.cov_base_penalty} pts`,                      'clamp(δCoV / 0.5) × 30',                        ''],
+      ['↳ Directional multiplier',  `${raw.cov_dir_mult}×`,                             '1 + 0.4 × tanh(mean_delta / 7)',                ''],
+      ['↳ Directional floor',       `${raw.cov_dir_floor} pts`,                         'clamp(dir_factor, 0,1) × 8',                    ''],
+      ['Forecast Volatility (total)','—',                                               'max(base×mult, dir_floor), clamped [0,40]',      `−${raw.cov_penalty} pts`],
+    ];
+    const otherRows=[
+      ['Requirements Churn',        `${raw.req_churn} changes/4w`,                      'changes × 1.0',                                 `−${raw.churn_penalty} pts`],
+      ['Backlog Net Growth',        'added − closed / 4w',                              'net_backlog × 0.5',                             `−${raw.backlog_penalty} pts`],
+      ['Forecast Slip',             `${raw.slip_days} days`,                            'slip_days × 0.25',                              `−${raw.slip_penalty} pts`],
+      ['Final Confidence',          '—',                                                '100 − Σ penalties, clamped [0,100]',             `<strong style="color:var(--accent2)">${summ.confidence_score}/100</strong>`],
+    ];
+    allRows=[...covRows,...otherRows];
+  }
+
+  allRows.forEach(([s,v,f,p])=>{
     const tr=document.createElement('tr');
     const isSubRow = s.startsWith('↳');
-    const isTotal  = s==='Final Confidence' || s==='Forecast Volatility (total)';
+    const isTotal  = s==='Final Confidence' || s==='Forecast Volatility (total)' || s==='Throughput Volatility (total)';
     const rowStyle = isSubRow ? 'opacity:.75' : isTotal ? 'font-weight:600' : '';
     tr.style.cssText = rowStyle;
     tr.innerHTML=`
@@ -714,6 +852,7 @@ function toggleFamilyGroup(){
   else{btn.classList.remove('btn-accent');btn.textContent='⊞ Group by Family';}
   if(currentPid){
     const summ=allData.summaries.find(s=>s.project_id===currentPid);
+    currentFramework=(summ.raw.delivery_framework||'planned').toLowerCase();
     if(charts.comp){charts.comp.destroy();delete charts.comp;}
     buildComp(summ);
     buildMetrics(summ);
