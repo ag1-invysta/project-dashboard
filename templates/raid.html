@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RAID Log — Project Health Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0b0f1a;--panel:#111827;--panel2:#0f1a2e;--border:#1f2d45;
+  --accent:#00d4b4;--accent2:#f97316;--warn:#facc15;--danger:#ef4444;
+  --text:#e2e8f0;--muted:#64748b;--green:#22c55e;--info:#38bdf8;
+  --fh:'Syne',sans-serif;--fm:'DM Mono',monospace;
+  --risk:#ef4444;--action:#facc15;--issue:#38bdf8;--decision:#22c55e;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100vh;}
+
+/* HEADER */
+header{padding:22px 36px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;
+  background:linear-gradient(135deg,#0b0f1a,#111c2e);position:sticky;top:0;z-index:50;}
+.logo{width:36px;height:36px;background:var(--accent);clip-path:polygon(50% 0%,100% 100%,0% 100%);}
+header h1{font-family:var(--fh);font-size:1.3rem;font-weight:800;color:#fff;}
+header h1 span{color:var(--accent);}
+.header-sub{font-size:.68rem;color:var(--muted);margin-top:2px;}
+.header-right{margin-left:auto;display:flex;gap:10px;align-items:center;}
+.btn{font-family:var(--fm);font-size:.72rem;padding:7px 14px;border-radius:6px;cursor:pointer;
+  border:1px solid var(--border);background:var(--panel);color:var(--text);transition:all .2s;
+  display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn-accent{background:rgba(0,212,180,.1);border-color:var(--accent);color:var(--accent);}
+.btn-nav{background:transparent;border-color:transparent;color:var(--muted);}
+.btn-nav:hover{color:var(--accent);border-color:transparent;}
+.btn-nav.active{color:var(--accent);border-bottom:2px solid var(--accent);border-radius:0;}
+
+/* MAIN */
+main{padding:28px 36px;max-width:1700px;margin:0 auto;}
+.sec-title{font-family:var(--fh);font-size:.65rem;font-weight:700;letter-spacing:3px;
+  text-transform:uppercase;color:var(--accent);margin-bottom:14px;}
+
+/* FILTER BAR */
+.filter-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:14px 18px;margin-bottom:20px;}
+.filter-bar select,.filter-bar input{
+  font-family:var(--fm);font-size:.72rem;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);padding:6px 10px;border-radius:6px;outline:none;transition:border-color .2s;cursor:pointer;}
+.filter-bar select:focus,.filter-bar input:focus{border-color:var(--accent);}
+.filter-bar input{min-width:200px;}
+.filter-label{font-size:.62rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+.filter-group{display:flex;flex-direction:column;gap:4px;}
+.filter-sep{width:1px;background:var(--border);height:36px;margin:0 4px;}
+.count-pills{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;}
+.cpill{font-size:.65rem;padding:4px 10px;border-radius:99px;font-weight:600;
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.cpill-total{background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border);}
+.cpill-open{background:rgba(250,204,21,.1);color:var(--warn);border:1px solid rgba(250,204,21,.25);}
+.cpill-crit{background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.25);}
+.cpill-esc{background:rgba(249,115,22,.1);color:var(--accent2);border:1px solid rgba(249,115,22,.25);}
+
+/* VIEW TOGGLE */
+.view-toggle{display:flex;gap:8px;margin-bottom:18px;align-items:center;}
+.view-label{font-size:.65rem;color:var(--muted);margin-right:4px;}
+
+/* TABLE */
+.table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  overflow-x:auto;margin-bottom:32px;}
+table.rtable{width:100%;border-collapse:collapse;font-size:.72rem;}
+table.rtable th{text-align:left;color:var(--muted);padding:10px 14px;
+  border-bottom:1px solid var(--border);font-weight:400;letter-spacing:1px;
+  text-transform:uppercase;font-size:.6rem;white-space:nowrap;cursor:pointer;user-select:none;}
+table.rtable th:hover{color:var(--accent);}
+table.rtable th .sort-icon{color:var(--muted);margin-left:4px;font-size:.6rem;}
+table.rtable td{padding:9px 14px;border-bottom:1px solid rgba(31,45,69,.4);vertical-align:middle;}
+table.rtable tr:last-child td{border-bottom:none;}
+table.rtable tr:hover td{background:rgba(255,255,255,.02);}
+.type-badge{display:inline-block;font-size:.6rem;font-weight:700;letter-spacing:.5px;
+  padding:2px 7px;border-radius:4px;text-transform:uppercase;}
+.type-Risk    {background:rgba(239,68,68,.15);  color:var(--risk);  border:1px solid rgba(239,68,68,.3);}
+.type-Action  {background:rgba(250,204,21,.12); color:var(--action);border:1px solid rgba(250,204,21,.3);}
+.type-Issue   {background:rgba(56,189,248,.12); color:var(--issue); border:1px solid rgba(56,189,248,.3);}
+.type-Decision{background:rgba(34,197,94,.1);   color:var(--decision);border:1px solid rgba(34,197,94,.25);}
+.pri-badge{display:inline-block;font-size:.58rem;padding:2px 6px;border-radius:3px;font-weight:600;}
+.pri-Critical{background:rgba(239,68,68,.2);color:var(--danger);}
+.pri-High    {background:rgba(249,115,22,.15);color:var(--accent2);}
+.pri-Medium  {background:rgba(250,204,21,.1);color:var(--warn);}
+.pri-Low     {background:rgba(100,116,139,.12);color:var(--muted);}
+.status-pill{display:inline-block;font-size:.6rem;padding:2px 8px;border-radius:99px;font-weight:500;}
+.st-Open        {background:rgba(100,116,139,.15);color:#94a3b8;border:1px solid rgba(100,116,139,.25);}
+.st-Under-Review{background:rgba(250,204,21,.1);color:var(--warn);border:1px solid rgba(250,204,21,.25);}
+.st-In-Progress {background:rgba(56,189,248,.12);color:var(--info);border:1px solid rgba(56,189,248,.25);}
+.st-Resolved    {background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.2);}
+.st-Approved    {background:rgba(0,212,180,.1);color:var(--accent);border:1px solid rgba(0,212,180,.25);}
+.esc-flag{font-size:.6rem;color:var(--accent2);font-weight:700;letter-spacing:.5px;
+  background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);padding:1px 6px;border-radius:3px;}
+.proj-chip{font-size:.62rem;padding:2px 8px;border-radius:5px;background:rgba(0,212,180,.06);
+  border:1px solid rgba(0,212,180,.15);color:var(--accent);}
+td.title-cell{max-width:280px;}
+.title-text{font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:270px;display:block;}
+.title-sub{font-size:.62rem;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:270px;display:block;}
+.no-results{text-align:center;padding:48px;color:var(--muted);font-size:.8rem;}
+
+/* KANBAN BOARD */
+.kanban-section{margin-top:8px;}
+.kanban-section>.sec-title{margin-bottom:6px;}
+.kanban-type-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+.ktype-tab{font-family:var(--fm);font-size:.65rem;padding:5px 14px;border-radius:99px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .2s;}
+.ktype-tab:hover{border-color:var(--accent);color:var(--accent);}
+.ktype-tab.active{color:#0b0f1a;font-weight:700;}
+.ktype-tab.tab-all.active  {background:var(--accent);border-color:var(--accent);}
+.ktype-tab.tab-Risk.active   {background:var(--risk);border-color:var(--risk);}
+.ktype-tab.tab-Action.active {background:var(--action);border-color:var(--action);}
+.ktype-tab.tab-Issue.active  {background:var(--issue);border-color:var(--issue);}
+.ktype-tab.tab-Decision.active{background:var(--decision);border-color:var(--decision);}
+.kanban-board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start;}
+@media(max-width:900px){.kanban-board{grid-template-columns:repeat(2,1fr);}}
+.kb-col{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.kb-col-header{padding:10px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;}
+.kb-col-name{font-family:var(--fh);font-size:.68rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+.kb-col-count{font-size:.65rem;background:rgba(255,255,255,.06);border:1px solid var(--border);
+  padding:2px 7px;border-radius:99px;color:var(--muted);}
+.kb-cards{padding:10px;display:flex;flex-direction:column;gap:8px;min-height:80px;}
+.kb-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+  border-left:3px solid var(--border);transition:border-color .15s;}
+.kb-card:hover{border-color:rgba(0,212,180,.4);}
+.kb-card.type-Risk    {border-left-color:var(--risk);}
+.kb-card.type-Action  {border-left-color:var(--action);}
+.kb-card.type-Issue   {border-left-color:var(--issue);}
+.kb-card.type-Decision{border-left-color:var(--decision);}
+.kb-card-top{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;}
+.kb-card-title{font-size:.7rem;color:var(--text);font-weight:500;line-height:1.4;margin-bottom:4px;}
+.kb-card-meta{font-size:.62rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.kb-empty{font-size:.68rem;color:var(--muted);text-align:center;padding:20px 10px;font-style:italic;}
+
+/* COLUMN ACCENT COLOURS */
+.kb-col.col-open       .kb-col-name{color:#94a3b8;}
+.kb-col.col-review     .kb-col-name{color:var(--warn);}
+.kb-col.col-progress   .kb-col-name{color:var(--info);}
+.kb-col.col-resolved   .kb-col-name{color:var(--green);}
+.kb-col.col-open       {border-top:2px solid #334155;}
+.kb-col.col-review     {border-top:2px solid var(--warn);}
+.kb-col.col-progress   {border-top:2px solid var(--info);}
+.kb-col.col-resolved   {border-top:2px solid var(--green);}
+
+/* LOADING */
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;
+  justify-content:center;z-index:200;font-family:var(--fh);font-size:1.1rem;color:var(--accent);}
+.spin{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;margin-right:14px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spin"></div>Loading RAID Log…</div>
+
+<header>
+  <div class="logo"></div>
+  <div>
+    <h1>Project <span>Health</span> Dashboard</h1>
+    <div class="header-sub">RAID Log — Risks · Actions · Issues · Decisions</div>
+  </div>
+  <div class="header-right">
+    <a href="/" class="btn btn-nav">◂ Dashboard</a>
+    <span class="btn btn-nav active" style="border-bottom:2px solid var(--accent);border-radius:0;color:var(--accent);">⊟ RAID Log</span>
+  </div>
+</header>
+
+<main>
+  <div class="sec-title">RAID Log — Portfolio View</div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar" id="filter-bar">
+    <div class="filter-group">
+      <div class="filter-label">Project</div>
+      <select id="f-project" onchange="applyFilters()">
+        <option value="">All Projects</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <div class="filter-label">Type</div>
+      <select id="f-type" onchange="applyFilters()">
+        <option value="">All Types</option>
+        <option value="Risk">Risk</option>
+        <option value="Action">Action</option>
+        <option value="Issue">Issue</option>
+        <option value="Decision">Decision</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Status</div>
+      <select id="f-status" onchange="applyFilters()">
+        <option value="">All Statuses</option>
+        <option value="Open">Open</option>
+        <option value="Under Review">Under Review</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Resolved">Resolved</option>
+        <option value="Approved">Approved</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Priority</div>
+      <select id="f-priority" onchange="applyFilters()">
+        <option value="">All Priorities</option>
+        <option value="Critical">Critical</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Escalated</div>
+      <select id="f-escalated" onchange="applyFilters()">
+        <option value="">All</option>
+        <option value="true">Escalated only</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group" style="flex:1;">
+      <div class="filter-label">Search</div>
+      <input type="text" id="f-search" placeholder="Search title, owner, ID…" oninput="applyFilters()"/>
+    </div>
+    <div class="count-pills" id="count-pills">
+      <span class="cpill cpill-total" id="cpill-total">— total</span>
+      <span class="cpill cpill-open" id="cpill-open">— open</span>
+      <span class="cpill cpill-crit" id="cpill-crit">— critical</span>
+      <span class="cpill cpill-esc"  id="cpill-esc">— escalated</span>
+    </div>
+  </div>
+
+  <!-- View toggle -->
+  <div class="view-toggle">
+    <span class="view-label">View:</span>
+    <button class="btn btn-accent" id="view-table-btn" onclick="setView('table')">☰ Table</button>
+    <button class="btn" id="view-board-btn" onclick="setView('board')">⊞ Board</button>
+    <button class="btn" id="clear-btn" onclick="clearFilters()" style="margin-left:auto;color:var(--muted);">✕ Clear Filters</button>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div id="view-table" class="table-wrap">
+    <table class="rtable" id="raid-table">
+      <thead>
+        <tr>
+          <th onclick="sortBy('raid_id')">ID <span class="sort-icon" id="sort-raid_id">↕</span></th>
+          <th onclick="sortBy('type')">Type <span class="sort-icon" id="sort-type">↕</span></th>
+          <th onclick="sortBy('project_name')">Project <span class="sort-icon" id="sort-project_name">↕</span></th>
+          <th onclick="sortBy('title')">Title / Impact <span class="sort-icon" id="sort-title">↕</span></th>
+          <th onclick="sortBy('priority')">Priority <span class="sort-icon" id="sort-priority">↕</span></th>
+          <th onclick="sortBy('status')">Status <span class="sort-icon" id="sort-status">↕</span></th>
+          <th onclick="sortBy('owner')">Owner <span class="sort-icon" id="sort-owner">↕</span></th>
+          <th onclick="sortBy('date_raised')">Raised <span class="sort-icon" id="sort-date_raised">↕</span></th>
+          <th onclick="sortBy('target_date')">Due <span class="sort-icon" id="sort-target_date">↕</span></th>
+          <th>Flags</th>
+        </tr>
+      </thead>
+      <tbody id="raid-body"></tbody>
+    </table>
+    <div class="no-results" id="no-results" style="display:none;">No items match the current filters.</div>
+  </div>
+
+  <!-- BOARD VIEW -->
+  <div id="view-board" style="display:none;">
+    <div class="kanban-section">
+      <div class="sec-title">RAID Kanban Board</div>
+      <div class="kanban-type-tabs" id="kb-type-tabs">
+        <button class="ktype-tab tab-all active" onclick="setKbType('all')">All Types</button>
+        <button class="ktype-tab tab-Risk"     onclick="setKbType('Risk')">Risk</button>
+        <button class="ktype-tab tab-Action"   onclick="setKbType('Action')">Action</button>
+        <button class="ktype-tab tab-Issue"    onclick="setKbType('Issue')">Issue</button>
+        <button class="ktype-tab tab-Decision" onclick="setKbType('Decision')">Decision</button>
+      </div>
+      <div class="kanban-board" id="kanban-board">
+        <div class="kb-col col-open" id="kb-col-open">
+          <div class="kb-col-header">
+            <span class="kb-col-name">Open</span>
+            <span class="kb-col-count" id="kb-cnt-open">0</span>
+          </div>
+          <div class="kb-cards" id="kb-cards-open"></div>
+        </div>
+        <div class="kb-col col-review" id="kb-col-review">
+          <div class="kb-col-header">
+            <span class="kb-col-name">Under Review</span>
+            <span class="kb-col-count" id="kb-cnt-review">0</span>
+          </div>
+          <div class="kb-cards" id="kb-cards-review"></div>
+        </div>
+        <div class="kb-col col-progress" id="kb-col-progress">
+          <div class="kb-col-header">
+            <span class="kb-col-name">In Progress</span>
+            <span class="kb-col-count" id="kb-cnt-progress">0</span>
+          </div>
+          <div class="kb-cards" id="kb-cards-progress"></div>
+        </div>
+        <div class="kb-col col-resolved" id="kb-col-resolved">
+          <div class="kb-col-header">
+            <span class="kb-col-name">Resolved / Approved</span>
+            <span class="kb-col-count" id="kb-cnt-resolved">0</span>
+          </div>
+          <div class="kb-cards" id="kb-cards-resolved"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── STATE ─────────────────────────────────────────────
+let allItems = [];
+let filtered = [];
+let sortKey = 'date_raised';
+let sortDir = -1; // -1 = desc, 1 = asc
+let activeView = 'table';
+let kbType = 'all';
+
+// Priority sort order
+const PRI_ORDER = {Critical:0,High:1,Medium:2,Low:3};
+const STATUS_COL = {
+  'Open':         'open',
+  'Under Review': 'review',
+  'In Progress':  'progress',
+  'Resolved':     'resolved',
+  'Approved':     'resolved',
+};
+
+// ── INIT ──────────────────────────────────────────────
+fetch('/api/raid').then(r=>r.json()).then(data=>{
+  allItems = data.items;
+
+  // Populate project filter
+  const sel = document.getElementById('f-project');
+  const projects = [...new Map(allItems.map(i=>[i.project_id,i.project_name])).entries()];
+  projects.sort((a,b)=>a[0].localeCompare(b[0])).forEach(([pid,pname])=>{
+    const o = document.createElement('option');
+    o.value = pid; o.textContent = `${pid} — ${pname}`;
+    sel.appendChild(o);
+  });
+
+  // Pre-filter from URL ?project=
+  const urlPid = new URLSearchParams(window.location.search).get('project');
+  if(urlPid){ sel.value = urlPid; }
+
+  applyFilters();
+  document.getElementById('loading').style.display='none';
+});
+
+// ── FILTERS ───────────────────────────────────────────
+function applyFilters(){
+  const fProj  = document.getElementById('f-project').value;
+  const fType  = document.getElementById('f-type').value;
+  const fStat  = document.getElementById('f-status').value;
+  const fPri   = document.getElementById('f-priority').value;
+  const fEsc   = document.getElementById('f-escalated').value;
+  const fSearch= document.getElementById('f-search').value.toLowerCase();
+
+  filtered = allItems.filter(i=>{
+    if(fProj && i.project_id !== fProj) return false;
+    if(fType && i.type !== fType) return false;
+    if(fStat && i.status !== fStat) return false;
+    if(fPri  && i.priority !== fPri) return false;
+    if(fEsc === 'true' && !i.escalated) return false;
+    if(fSearch){
+      const hay = (i.raid_id+i.title+i.owner+i.project_name+i.impact).toLowerCase();
+      if(!hay.includes(fSearch)) return false;
+    }
+    return true;
+  });
+
+  sortFiltered();
+  updateCounts();
+  if(activeView==='table') renderTable();
+  else renderBoard();
+}
+
+function clearFilters(){
+  ['f-project','f-type','f-status','f-priority','f-escalated'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-search').value='';
+  applyFilters();
+}
+
+// ── SORTING ───────────────────────────────────────────
+function sortBy(key){
+  if(sortKey===key) sortDir*=-1; else { sortKey=key; sortDir=-1; }
+  document.querySelectorAll('.sort-icon').forEach(el=>el.textContent='↕');
+  const el=document.getElementById('sort-'+key);
+  if(el) el.textContent = sortDir===1?'↑':'↓';
+  sortFiltered();
+  if(activeView==='table') renderTable();
+}
+
+function sortFiltered(){
+  filtered.sort((a,b)=>{
+    let av=a[sortKey]||'', bv=b[sortKey]||'';
+    if(sortKey==='priority'){av=PRI_ORDER[av]??9; bv=PRI_ORDER[bv]??9; return (av-bv)*sortDir;}
+    return av<bv?-sortDir:av>bv?sortDir:0;
+  });
+}
+
+// ── COUNTS ────────────────────────────────────────────
+function updateCounts(){
+  const open=filtered.filter(i=>['Open','Under Review'].includes(i.status)).length;
+  const crit=filtered.filter(i=>i.priority==='Critical').length;
+  const esc =filtered.filter(i=>i.escalated).length;
+  document.getElementById('cpill-total').textContent=`${filtered.length} items`;
+  document.getElementById('cpill-open').textContent=`${open} open`;
+  document.getElementById('cpill-crit').textContent=`${crit} critical`;
+  document.getElementById('cpill-esc').textContent=`${esc} escalated`;
+}
+
+// ── TABLE RENDER ──────────────────────────────────────
+function renderTable(){
+  const body=document.getElementById('raid-body');
+  const noRes=document.getElementById('no-results');
+  body.innerHTML='';
+  if(!filtered.length){ noRes.style.display='block'; return; }
+  noRes.style.display='none';
+
+  const today=new Date();
+  filtered.forEach(i=>{
+    const statCls='st-'+i.status.replace(/\s+/g,'-');
+    const due=i.target_date?new Date(i.target_date):null;
+    const overdue=due&&due<today&&!['Resolved','Approved'].includes(i.status);
+    const dueStr=i.target_date||'—';
+    const dueCls=overdue?'color:var(--danger)':'';
+
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:var(--muted);white-space:nowrap;font-size:.65rem">${i.raid_id}</td>
+      <td><span class="type-badge type-${i.type}">${i.type[0]}</span>
+          <span style="font-size:.62rem;color:var(--muted);margin-left:4px">${i.type}</span></td>
+      <td><span class="proj-chip">${i.project_id}</span>
+          <div style="font-size:.6rem;color:var(--muted);margin-top:3px">${i.project_name}</div></td>
+      <td class="title-cell">
+        <span class="title-text">${i.title}</span>
+        <span class="title-sub">${i.impact||''}</span>
+      </td>
+      <td><span class="pri-badge pri-${i.priority}">${i.priority}</span></td>
+      <td><span class="status-pill ${statCls}">${i.status}</span></td>
+      <td style="color:var(--text);white-space:nowrap">${i.owner||'—'}</td>
+      <td style="color:var(--muted);white-space:nowrap;font-size:.65rem">${i.date_raised||'—'}</td>
+      <td style="${dueCls};white-space:nowrap;font-size:.65rem">${dueStr}${overdue?' ⚠':''}</td>
+      <td style="white-space:nowrap">
+        ${i.escalated?'<span class="esc-flag">ESC</span>':''}
+        ${i.type==='Risk'&&i.mitigation_strategy?`<span style="font-size:.58rem;color:var(--muted);margin-left:4px">${i.mitigation_strategy}</span>`:''}
+      </td>`;
+    body.appendChild(tr);
+  });
+}
+
+// ── BOARD RENDER ──────────────────────────────────────
+function setKbType(t){
+  kbType=t;
+  document.querySelectorAll('.ktype-tab').forEach(el=>{
+    el.classList.toggle('active', el.classList.contains('tab-'+t)||(t==='all'&&el.classList.contains('tab-all')));
+  });
+  renderBoard();
+}
+
+function renderBoard(){
+  const cols={open:[],review:[],progress:[],resolved:[]};
+  const src = kbType==='all' ? filtered : filtered.filter(i=>i.type===kbType);
+
+  src.forEach(i=>{
+    const col=STATUS_COL[i.status]||'open';
+    cols[col].push(i);
+  });
+
+  Object.entries(cols).forEach(([colKey,items])=>{
+    const container=document.getElementById('kb-cards-'+colKey);
+    const counter=document.getElementById('kb-cnt-'+colKey);
+    container.innerHTML='';
+    counter.textContent=items.length;
+
+    if(!items.length){
+      container.innerHTML='<div class="kb-empty">No items</div>';
+      return;
+    }
+
+    // Sort: escalated first, then by priority
+    items.sort((a,b)=>{
+      if(a.escalated!==b.escalated) return a.escalated?-1:1;
+      return (PRI_ORDER[a.priority]??9)-(PRI_ORDER[b.priority]??9);
+    });
+
+    items.forEach(i=>{
+      const today=new Date();
+      const due=i.target_date?new Date(i.target_date):null;
+      const overdue=due&&due<today&&!['Resolved','Approved'].includes(i.status);
+      const card=document.createElement('div');
+      card.className=`kb-card type-${i.type}`;
+      card.innerHTML=`
+        <div class="kb-card-top">
+          <span class="type-badge type-${i.type}">${i.type[0]}</span>
+          <span class="pri-badge pri-${i.priority}">${i.priority}</span>
+          ${i.escalated?'<span class="esc-flag">ESC</span>':''}
+          <span style="font-size:.58rem;color:var(--muted);margin-left:auto">${i.raid_id}</span>
+        </div>
+        <div class="kb-card-title">${i.title}</div>
+        <div class="kb-card-meta">
+          <span class="proj-chip" style="font-size:.58rem;padding:1px 6px">${i.project_id}</span>
+          <span>👤 ${i.owner||'—'}</span>
+          ${i.target_date?`<span style="color:${overdue?'var(--danger)':'var(--muted)'}">⏱ ${i.target_date}${overdue?' ⚠':''}</span>`:''}
+        </div>`;
+      container.appendChild(card);
+    });
+  });
+}
+
+// ── VIEW TOGGLE ───────────────────────────────────────
+function setView(v){
+  activeView=v;
+  document.getElementById('view-table').style.display=v==='table'?'block':'none';
+  document.getElementById('view-board').style.display=v==='board'?'block':'none';
+  document.getElementById('view-table-btn').className=v==='table'?'btn btn-accent':'btn';
+  document.getElementById('view-board-btn').className=v==='board'?'btn btn-accent':'btn';
+  if(v==='board') renderBoard();
+}
+</script>
+</body>
+</html>

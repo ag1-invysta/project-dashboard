@@ -166,6 +166,7 @@ main{padding:28px 36px;max-width:1700px;margin:0 auto;}
   </div>
   <div class="header-right">
     <span id="hdr-meta" style="font-size:.7rem;color:var(--muted)"></span>
+    <a href="/raid" class="btn" style="text-decoration:none">⊟ RAID Log</a>
     <button class="btn" onclick="openSettings()">⚙ Thresholds</button>
     <button class="btn btn-accent" onclick="exportPNG()">↓ Export PNG</button>
     <button class="btn btn-accent" onclick="exportPDF()">↓ Export PDF</button>
@@ -369,7 +370,7 @@ function buildCards(summaries){
       chips+=`<div class="chip">Schedule <strong>${raw.sched_var_pct>0?'+':''}${raw.sched_var_pct}%</strong></div>`;
       chips+=`<div class="chip">Slip <strong>${raw.slip_days}d</strong></div>`;
       if(cpiStr) chips+=`<div class="chip">${cpiStr}</div>`;
-      if(raw.risks_high>0) chips+=`<div class="chip ${riskCls}">${raw.risks_high} high risks</div>`;
+      if(raw.risks_high>0) chips+=`<div class="chip ${riskCls}" style="cursor:pointer" onclick="event.stopPropagation();window.location='/raid?project=${s.project_id}'">${raw.risks_high} high risks ↗</div>`;
       if(raw.milestones_planned) chips+=`<div class="chip ${msCls}">MS ${raw.milestones_hit}/${raw.milestones_planned}</div>`;
     }
 
@@ -574,7 +575,7 @@ function buildKPIs(raw){
     }
     if(raw.risks_open>0){
       const rc=raw.risks_high>=5?'var(--danger)':raw.risks_high>=2?'var(--warn)':'var(--green)';
-      kpis.push({label:'Open Risks',val:raw.risks_open,sub:`${raw.risks_high} high severity`,color:rc});
+      kpis.push({label:'Open Risks',val:raw.risks_open,sub:`${raw.risks_high} high · <a href="/raid?project=${currentPid}" style="color:var(--accent);text-decoration:none">View RAID ↗</a>`,color:rc,rawSub:true});
     }
     kpis.push({label:'Forecast Slip',val:raw.slip_days+'d',sub:'Days beyond planned end',color:raw.slip_days>30?'var(--danger)':raw.slip_days>0?'var(--warn)':'var(--green)'});
     kpis.push({label:'Forecast CoV',val:raw.cov.toFixed(3),sub:'Forecast volatility',color:raw.cov>0.3?'var(--danger)':raw.cov>0.1?'var(--warn)':'var(--green)',tip:true});

@@ -674,9 +674,76 @@ def load_data():
     return df
 
 
+def load_raid():
+    csv_path = os.path.join(os.path.dirname(__file__), "raid.csv")
+    df = pd.read_csv(csv_path)
+    df = df.dropna(how="all")
+    # Normalise boolean
+    df["escalated"] = df["escalated"].astype(str).str.lower().isin(["true", "1", "yes"])
+    return df
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/raid")
+def raid():
+    return render_template("raid.html")
+
+
+@app.route("/api/raid", methods=["GET"])
+def api_raid():
+    df = load_raid()
+    # Optional filter by project_id
+    pid = request.args.get("project_id")
+    if pid:
+        df = df[df["project_id"] == pid]
+
+    # Build project name map from main data
+    try:
+        main_df = load_data()
+        name_map = main_df.drop_duplicates("project_id").set_index("project_id")["project_name"].to_dict()
+    except Exception:
+        name_map = {}
+
+    items = []
+    for _, r in df.iterrows():
+        items.append({
+            "raid_id":            r["raid_id"],
+            "project_id":         r["project_id"],
+            "project_name":       name_map.get(r["project_id"], r["project_id"]),
+            "type":               r["type"],
+            "title":              r["title"],
+            "priority":           r["priority"],
+            "status":             r["status"],
+            "owner":              r["owner"],
+            "date_raised":        str(r["date_raised"]),
+            "target_date":        str(r["target_date"]),
+            "impact":             r["impact"],
+            "probability":        str(r.get("probability", "")) if pd.notna(r.get("probability", "")) else "",
+            "mitigation_strategy":str(r.get("mitigation_strategy", "")) if pd.notna(r.get("mitigation_strategy", "")) else "",
+            "escalated":          bool(r["escalated"]),
+        })
+
+    # Summary counts per project
+    all_df = load_raid()
+    all_df["escalated"] = all_df["escalated"].astype(str).str.lower().isin(["true", "1", "yes"])
+    project_counts = {}
+    for pid_key, grp in all_df.groupby("project_id"):
+        project_counts[pid_key] = {
+            "total":     len(grp),
+            "open":      int((grp["status"].isin(["Open","Under Review"])).sum()),
+            "critical":  int((grp["priority"] == "Critical").sum()),
+            "escalated": int(grp["escalated"].sum()),
+        }
+
+    return jsonify({
+        "items":          items,
+        "project_counts": project_counts,
+        "project_names":  name_map,
+    })
 
 
 @app.route("/api/data")

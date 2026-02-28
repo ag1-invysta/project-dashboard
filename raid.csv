@@ -1,0 +1,42 @@
+raid_id,project_id,type,title,priority,status,owner,date_raised,target_date,impact,probability,mitigation_strategy,escalated
+R-001,P-1001,Risk,Third-party payment gateway API deprecation,High,In Progress,Sarah Chen,2026-01-14,2026-03-31,Delays card tokenisation cutover by 4–6 weeks,High,Mitigate,false
+R-002,P-1001,Risk,PCI-DSS audit scope creep,Critical,Under Review,James Okafor,2026-01-28,2026-04-15,Potential project halt pending compliance sign-off,Medium,Avoid,true
+R-003,P-1001,Risk,Key architect leaving mid-project,Medium,Open,Sarah Chen,2026-02-07,2026-03-14,Knowledge gap in tokenisation module,Low,Mitigate,false
+A-001,P-1001,Action,Complete PCI scoping workshop with CISO,High,In Progress,James Okafor,2026-01-21,2026-03-07,Unresolved scope will block testing phase,,,false
+A-002,P-1001,Action,Document fallback to legacy gateway,Medium,Resolved,Dev Team,2026-01-14,2026-02-14,Needed for rollback plan,,,false
+I-001,P-1001,Issue,Staging environment DNS misconfiguration blocking QA,High,In Progress,DevOps Lead,2026-02-14,2026-03-07,QA pipeline stalled — 3 days lost,,,true
+D-001,P-1001,Decision,Use Stripe as primary gateway (not Adyen),High,Approved,Sarah Chen,2026-01-07,2026-01-14,Binding architecture decision,,,false
+D-002,P-1001,Decision,Defer loyalty points integration to Phase 2,Medium,Approved,James Okafor,2026-02-07,2026-02-21,Reduces Phase 1 scope risk,,,false
+R-004,P-1002,Risk,iOS 18 breaking change in push notification entitlement,Medium,Resolved,Mobile Lead,2026-01-10,2026-02-28,App store rejection risk,High,Mitigate,false
+A-003,P-1002,Action,Ship hotfix for crash on Android 15 devices,Critical,Resolved,Android Dev,2026-02-07,2026-02-14,Crash affecting 4% of active users,,,false
+D-003,P-1002,Decision,Adopt Kotlin Multiplatform for shared business logic,Medium,Approved,Mobile Lead,2026-01-21,2026-02-07,Reduces future platform divergence,,,false
+R-005,P-1003,Risk,Source data schema changes from legacy warehouse not documented,Critical,In Progress,Data Architect,2025-12-10,2026-03-31,Migration scripts will fail at run-time,High,Mitigate,true
+R-006,P-1003,Risk,dbt model performance degradation at scale,High,Under Review,Analytics Lead,2026-01-14,2026-04-30,Query SLAs breached in UAT,Medium,Mitigate,false
+R-007,P-1003,Risk,Vendor lock-in on proprietary ETL tooling,Medium,Open,Data Architect,2026-02-07,2026-05-15,Future portability constrained,Low,Accept,false
+R-008,P-1003,Risk,Data residency compliance gap (EU data in US region),Critical,In Progress,Security Lead,2026-01-21,2026-03-15,Regulatory breach — GDPR,High,Avoid,true
+R-009,P-1003,Risk,Insufficient UAT test data coverage for edge cases,High,Under Review,QA Lead,2026-02-14,2026-04-01,Defects escaping to prod,Medium,Mitigate,false
+A-004,P-1003,Action,Engage legacy warehouse team for schema documentation,Critical,In Progress,Data Architect,2025-12-17,2026-02-28,Blocking migration script authoring,,,true
+A-005,P-1003,Action,Provision EU-West data plane in Snowflake,High,In Progress,Cloud Ops,2026-01-28,2026-03-15,Required to resolve GDPR risk,,,false
+A-006,P-1003,Action,Run performance baseline on dbt models with 10x data volume,Medium,Open,Analytics Lead,2026-02-21,2026-04-15,Needed before scaling decision,,,false
+I-002,P-1003,Issue,Airflow DAG failures causing daily pipeline stalls,Critical,In Progress,Data Ops,2026-02-07,2026-02-28,4-hour data latency breaching SLA,,,true
+I-003,P-1003,Issue,Column type mismatch breaking 3 downstream reports,High,Under Review,Analytics Lead,2026-02-21,2026-03-07,Finance dashboard showing incorrect figures,,,false
+D-004,P-1003,Decision,Adopt Medallion architecture (Bronze/Silver/Gold),High,Approved,Data Architect,2025-12-03,2025-12-17,Foundational data layer design,,,false
+D-005,P-1003,Decision,Freeze schema changes during UAT window,High,Approved,Project Lead,2026-02-14,2026-02-21,Prevents moving target during testing,,,false
+R-010,P-1004,Risk,Terraform state file corruption after team member error,High,Resolved,Cloud Ops,2026-01-14,2026-02-07,Infra drift undetectable without state,High,Mitigate,false
+R-011,P-1004,Risk,Cost overrun if reserved instance commitment made early,Medium,Under Review,Finance Lead,2026-02-07,2026-04-30,OPEX vs CAPEX trade-off,Low,Accept,false
+A-007,P-1004,Action,Complete DR failover test for Prod environment,High,In Progress,Cloud Ops,2026-02-14,2026-03-21,Required for ISO 27001 audit,,,false
+D-006,P-1004,Decision,Adopt AWS Landing Zone over manual account vending,Medium,Approved,Cloud Architect,2026-01-07,2026-01-21,Standardises governance at scale,,,false
+R-012,P-1005,Risk,UX research insights not incorporated — design going ahead blind,High,In Progress,Product Lead,2026-01-21,2026-03-14,Poor adoption post-launch,High,Mitigate,false
+R-013,P-1005,Risk,CMS vendor contract renewal delay blocking content authoring,Critical,Under Review,Procurement,2026-02-07,2026-03-01,Launch blocked if not resolved,High,Avoid,true
+R-014,P-1005,Risk,Accessibility (WCAG 2.2 AA) gaps in component library,High,Open,Frontend Lead,2026-02-21,2026-04-15,Legal exposure and reputational risk,Medium,Mitigate,false
+R-015,P-1005,Risk,SEO impact of URL restructure not assessed,Medium,Open,SEO Specialist,2026-02-14,2026-04-01,Traffic drop on cutover,Low,Mitigate,false
+A-008,P-1005,Action,Run usability testing on prototype with 10 participants,High,In Progress,UX Lead,2026-01-28,2026-03-07,Validates redesign assumptions,,,false
+A-009,P-1005,Action,Engage legal to review cookie consent implementation,Medium,Open,Product Lead,2026-02-21,2026-03-28,PECR compliance,,,false
+I-004,P-1005,Issue,Build pipeline failures due to Node version mismatch,High,Resolved,Frontend Dev,2026-02-14,2026-02-21,Blocked frontend deployments for 2 days,,,false
+I-005,P-1005,Issue,Third-party analytics SDK causing 2s page-load regression,Critical,In Progress,Frontend Lead,2026-02-28,2026-03-14,Violates Core Web Vitals target,,,true
+D-007,P-1005,Decision,Headless CMS over monolith (Contentful selected),High,Approved,Product Lead,2025-12-10,2025-12-24,Architecture decision for content layer,,,false
+D-008,P-1005,Decision,Soft launch to 10% of traffic before full cutover,High,Approved,Project Lead,2026-02-07,2026-02-14,Risk mitigation for go-live,,,false
+R-016,P-1006,Risk,Alert fatigue causing SRE team to miss critical pages,High,In Progress,SRE Lead,2026-02-07,2026-03-14,Incident response SLA breach,High,Mitigate,false
+A-010,P-1006,Action,Consolidate duplicate Prometheus alert rules,Medium,In Progress,SRE Engineer,2026-02-14,2026-03-07,Reduce noise to actionable alerts,,,false
+I-006,P-1006,Issue,Gateway rate-limit config causing intermittent 429s in prod,High,Under Review,Platform Eng,2026-02-21,2026-03-07,Degraded API consumer experience,,,false
+D-009,P-1006,Decision,Adopt OpenTelemetry over proprietary agent for tracing,Medium,Approved,SRE Lead,2026-01-28,2026-02-14,Vendor-neutral observability stack,,,false
